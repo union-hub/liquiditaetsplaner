@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Liquiditätsplaner</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Liquidität">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1e3a8a">
+  <meta name="description" content="Persönlicher Liquiditätsplaner – Einnahmen, Ausgaben, Sparziele">
+
+  <!-- PWA Icons (inline SVG als Data-URL) -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%231e3a8a'/%3E%3Ctext x='90' y='125' text-anchor='middle' font-size='100'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231e3a8a'/%3E%3Ctext x='16' y='24' text-anchor='middle' font-size='20'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E">
+
+  <!-- PWA Manifest (inline) -->
+  <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue: #2563eb;
+      --green: #16a34a;
+      --red: #dc2626;
+      --amber: #d97706;
+      --purple: #7c3aed;
+      --teal: #0891b2;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 1px 4px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.06);
+      --radius: 14px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a; --card: #1e293b; --text: #f1f5f9;
+        --muted: #94a3b8; --border: #334155;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+      color: #fff; padding: 20px 16px 16px;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.3px; }
+    header p  { font-size: 0.78rem; opacity: 0.8; margin-top: 2px; }
+    .header-row { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+    .month-nav { display: flex; align-items: center; gap: 8px; }
+    .month-nav button {
+      background: rgba(255,255,255,0.18); border: none; color: #fff;
+      border-radius: 8px; padding: 6px 12px; font-size: 0.85rem; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .month-nav button:active { background: rgba(255,255,255,0.3); }
+    #currentMonthLabel { font-weight: 600; font-size: 0.9rem; min-width: 110px; text-align: center; }
+
+    /* ── Tab Bar ── */
+    .tabbar {
+      display: flex; background: var(--card);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; position: sticky; top: 82px; z-index: 90;
+    }
+    .tabbar::-webkit-scrollbar { display: none; }
+    .tab {
+      flex: 1; min-width: 80px; padding: 12px 4px 10px;
+      text-align: center; font-size: 0.72rem; font-weight: 600;
+      color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+      white-space: nowrap; transition: color 0.2s;
+    }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab-icon { font-size: 1.1rem; display: block; margin-bottom: 2px; }
+
+    /* ── Page ── */
+    .page { display: none; padding: 16px; max-width: 900px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--muted); margin-bottom: 12px;
+    }
+
+    /* ── KPI row ── */
+    .kpi-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 14px; }
+    .kpi { background: var(--card); border-radius: var(--radius); padding: 14px 12px; box-shadow: var(--shadow); text-align: center; }
+    .kpi-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+    .kpi-value { font-size: 1.25rem; font-weight: 800; margin-top: 4px; }
+    .kpi-trend { font-size: 0.72rem; margin-top: 2px; }
+    .pos { color: var(--green); } .neg { color: var(--red); } .neu { color: var(--muted); }
+
+    /* ── Form Elements ── */
+    label { font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px; color: var(--text); }
+    input[type="text"], input[type="number"], select {
+      width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-size: 0.9rem; background: var(--bg);
+      color: var(--text); outline: none; appearance: none;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus { border-color: var(--blue); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .form-row-3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .form-full { margin-bottom: 10px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 16px; border-radius: 10px; font-size: 0.85rem;
+      font-weight: 700; border: none; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+      transition: opacity 0.15s;
+    }
+    .btn:active { opacity: 0.75; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-success { background: var(--green); color: #fff; }
+    .btn-danger  { background: var(--red);   color: #fff; font-size: 0.75rem; padding: 6px 10px; }
+    .btn-amber   { background: var(--amber); color: #fff; }
+    .btn-sm      { padding: 5px 10px; font-size: 0.75rem; border-radius: 8px; }
+    .btn-full    { width: 100%; justify-content: center; margin-top: 6px; }
+
+    /* ── List Items ── */
+    .item-list { display: flex; flex-direction: column; gap: 8px; }
+    .item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; background: var(--bg); border-radius: 10px;
+      border-left: 4px solid var(--blue);
+      flex-wrap: wrap; gap: 6px;
+    }
+    .item.expense { border-left-color: var(--red); }
+    .item.income  { border-left-color: var(--green); }
+    .item-left { flex: 1; min-width: 0; }
+    .item-name { font-weight: 600; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-meta { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+    .item-right { display: flex; align-items: center; gap: 8px; }
+    .item-amount { font-weight: 800; font-size: 0.95rem; }
+
+    /* ── Warning Banner ── */
+    .warning-banner {
+      background: #fef2f2; border: 1.5px solid #fca5a5;
+      border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .warning-banner.ok { background: #f0fdf4; border-color: #86efac; }
+    .warning-icon { font-size: 1.3rem; flex-shrink: 0; }
+    .warning-text { font-size: 0.82rem; font-weight: 600; }
+    .warning-sub  { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Progress Bar ── */
+    .progress-wrap { background: var(--border); border-radius: 99px; height: 10px; overflow: hidden; margin: 8px 0 4px; }
+    .progress-bar  { height: 100%; border-radius: 99px; transition: width 0.4s; background: var(--green); }
+    .progress-bar.warn { background: var(--amber); }
+    .progress-bar.over { background: var(--red); }
+
+    /* ── Chart Container ── */
+    .chart-wrap { position: relative; height: 220px; width: 100%; }
+    .chart-wrap-tall { position: relative; height: 280px; width: 100%; }
+
+    /* ── Section Header ── */
+    .section-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+    }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 99px;
+      font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    }
+    .badge-fix  { background: #dbeafe; color: #1e40af; }
+    .badge-var  { background: #fef3c7; color: #92400e; }
+    .badge-spar { background: #d1fae5; color: #065f46; }
+
+    /* ── Month Stripe ── */
+    .month-stripe { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+    .month-dot {
+      flex-shrink: 0; width: 44px; text-align: center; padding: 8px 4px;
+      border-radius: 10px; font-size: 0.68rem; font-weight: 700; cursor: pointer;
+      border: 2px solid transparent;
+    }
+    .month-dot.active { border-color: var(--blue); }
+    .month-dot .md-saldo { font-size: 0.8rem; font-weight: 800; margin-top: 2px; }
+
+    /* ── Table ── */
+    .mini-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .mini-table th { text-align: left; padding: 6px 8px; color: var(--muted); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    .mini-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+    .mini-table tr:last-child td { border-bottom: none; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: #1e293b; color: #fff; padding: 10px 20px;
+      border-radius: 99px; font-size: 0.82rem; font-weight: 600;
+      z-index: 999; transition: transform 0.3s;
+      pointer-events: none; white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45); z-index: 200;
+      align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--card); border-radius: 20px 20px 0 0;
+      padding: 20px 16px 32px; width: 100%; max-width: 540px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal-title { font-size: 1rem; font-weight: 800; margin-bottom: 14px; }
+    .modal-close { float: right; background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--muted); margin-top: -4px; }
+
+    @media (min-width: 600px) {
+      .kpi-row { grid-template-columns: repeat(3,1fr); }
+      .modal-overlay { align-items: center; }
+      .modal { border-radius: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+
+<!-- iOS Install Banner -->
+<div id="iosBanner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;background:#1e3a8a;color:#fff;padding:14px 16px 28px;align-items:flex-start;gap:12px;box-shadow:0 -2px 16px rgba(0,0,0,0.3)">
+  <span style="font-size:1.6rem;flex-shrink:0">📲</span>
+  <div style="flex:1">
+    <div style="font-weight:700;font-size:0.9rem">Als App installieren</div>
+    <div style="font-size:0.78rem;opacity:0.85;margin-top:3px;line-height:1.4">
+      Tippe unten auf <strong>„Teilen" ↑</strong> und dann auf <strong>„Zum Home-Bildschirm"</strong> – dann hast du den Liquiditätsplaner als App.
+    </div>
+  </div>
+  <button onclick="dismissIOSBanner()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:8px;padding:6px 10px;font-size:0.8rem;cursor:pointer;flex-shrink:0">✕</button>
+</div>
+
+<!-- Android Install Button (wird per JS eingeblendet) -->
+<button id="installBtn" style="display:none;position:fixed;bottom:20px;right:16px;z-index:998;background:#2563eb;color:#fff;border:none;border-radius:99px;padding:12px 18px;font-size:0.85rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,0.4);cursor:pointer;align-items:center;gap:6px">
+  📲 Als App installieren
+</button>
+
+<header>
+  <div class="header-row">
+    <div>
+      <h1>💰 Liquiditätsplaner</h1>
+      <p id="headerSub">Persönliche Finanzübersicht</p>
+    </div>
+    <div class="month-nav">
+      <button onclick="shiftMonth(-1)">‹</button>
+      <span id="currentMonthLabel"></span>
+      <button onclick="shiftMonth(1)">›</button>
+    </div>
+  </div>
+</header>
+
+<!-- TAB BAR -->
+<div class="tabbar">
+  <div class="tab active" onclick="showPage('dashboard')"><span class="tab-icon">📊</span>Übersicht</div>
+  <div class="tab" onclick="showPage('einnahmen')"><span class="tab-icon">💵</span>Einnahmen</div>
+  <div class="tab" onclick="showPage('ausgaben')"><span class="tab-icon">💸</span>Ausgaben</div>
+  <div class="tab" onclick="showPage('sparziele')"><span class="tab-icon">🎯</span>Sparziele</div>
+  <div class="tab" onclick="showPage('vorschau')"><span class="tab-icon">📅</span>Vorschau</div>
+  <div class="tab" onclick="showPage('sichern')"><span class="tab-icon">💾</span>Sichern</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- MODAL: Kategorie anlegen -->
+<div class="modal-overlay" id="catModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeCatModal()">×</button>
+    <div class="modal-title">📂 Neue Kategorie</div>
+    <div class="form-full">
+      <label>Kategoriename</label>
+      <input type="text" id="newCatName" placeholder="z.B. Haustier, Sport …">
+    </div>
+    <div class="form-full">
+      <label>Typ</label>
+      <select id="newCatType">
+        <option value="ausgabe">Ausgabe</option>
+        <option value="einnahme">Einnahme</option>
+      </select>
+    </div>
+    <div class="form-full">
+      <label>Emoji (optional)</label>
+      <input type="text" id="newCatEmoji" placeholder="🐶" maxlength="4">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="saveCategory()">✅ Kategorie speichern</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ PAGES ══════════════════════════════════════════════ -->
+
+<!-- PAGE: DASHBOARD -->
+<div class="page active" id="page-dashboard">
+  <div id="warnBanner"></div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">Einnahmen</div><div class="kpi-value pos" id="kpiEin">–</div></div>
+    <div class="kpi"><div class="kpi-label">Ausgaben</div><div class="kpi-value neg" id="kpiAus">–</div></div>
+    <div class="kpi"><div class="kpi-label">Saldo</div><div class="kpi-value" id="kpiSaldo">–</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📈 Einnahmen vs. Ausgaben (12 Monate)</div>
+    <div class="chart-wrap"><canvas id="chartBar"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🥧 Ausgaben nach Kategorie (aktueller Monat)</div>
+    <div class="chart-wrap"><canvas id="chartDonut"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💧 Liquiditätsverlauf (Kumuliert)</div>
+    <div class="chart-wrap"><canvas id="chartLine"></canvas></div>
+  </div>
+</div>
+
+<!-- PAGE: EINNAHMEN -->
+<div class="page" id="page-einnahmen">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0">➕ Einnahme erfassen</div>
+    </div>
+    <div class="form-full">
+      <label>Bezeichnung</label>
+      <input type="text" id="einName" placeholder="z.B. Gehalt netto">
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Betrag (€)</label>
+        <input type="number" id="einBetrag" placeholder="2.800,00" min="0" step="0.01">
+      </div>
+      <div>
+        <label>Kategorie</label>
+        <select id="einKat"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Wiederholung</label>
+        <select id="einWdh">
+          <option value="monatlich">Monatlich</option>
+          <option value="einmalig">Einmalig</option>
+          <option value="jaehrlich">Jährlich</option>
+          <option value="quartalsweise">Quartalsweise</option>
+        </select>
+      </div>
+      <div>
+        <label>Ab Monat</label>
+        <select id="einMonat"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Bis Monat <span style="font-weight:400;color:var(--muted)">(opt.)</span></label>
+        <select id="einBisMonat"><option value="">Kein Ende</option></select>
+      </div>
+      <div></div>
+    </div>
+    <button class="btn btn-success btn-full" onclick="addEinnahme()">✅ Einnahme hinzufügen</button>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0">📋 Meine Einnahmen</div>
+      <button class="btn btn-sm" style="background:var(--bg);color:var(--blue);border:1.5px solid var(--blue)" onclick="openCatModal('einnahme')">+ Kategorie</button>
+    </div>
+    <div class="item-list" id="einnahmenList"></div>
+  </div>
+</div>
+
+<!-- PAGE: AUSGABEN -->
+<div class="page" id="page-ausgaben">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0">➕ Ausgabe erfassen</div>
+    </div>
+    <div class="form-full">
+      <label>Bezeichnung</label>
+      <input type="text" id="ausName" placeholder="z.B. Miete">
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Betrag (€)</label>
+        <input type="number" id="ausBetrag" placeholder="850,00" min="0" step="0.01">
+      </div>
+      <div>
+        <label>Kategorie</label>
+        <select id="ausKat"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Typ</label>
+        <select id="ausTyp">
+          <option value="fix">Fix (immer gleich)</option>
+          <option value="variabel">Variabel</option>
+          <option value="sparen">Sparbetrag</option>
+        </select>
+      </div>
+      <div>
+        <label>Wiederholung</label>
+        <select id="ausWdh">
+          <option value="monatlich">Monatlich</option>
+          <option value="einmalig">Einmalig</option>
+          <option value="jaehrlich">Jährlich</option>
+          <option value="quartalsweise">Quartalsweise</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Ab Monat</label>
+        <select id="ausMonat"></select>
+      </div>
+      <div>
+        <label>Bis Monat <span style="font-weight:400;color:var(--muted)">(opt.)</span></label>
+        <select id="ausBisMonat"><option value="">Kein Ende</option></select>
+      </div>
+    </div>
+    <button class="btn btn-danger btn-full" onclick="addAusgabe()">➕ Ausgabe hinzufügen</button>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0">📋 Meine Ausgaben</div>
+      <button class="btn btn-sm" style="background:var(--bg);color:var(--red);border:1.5px solid var(--red)" onclick="openCatModal('ausgabe')">+ Kategorie</button>
+    </div>
+    <div class="item-list" id="ausgabenList"></div>
+  </div>
+</div>
+
+<!-- PAGE: SPARZIELE -->
+<div class="page" id="page-sparziele">
+  <div class="card">
+    <div class="card-title">🎯 Neues Sparziel</div>
+    <div class="form-full">
+      <label>Bezeichnung</label>
+      <input type="text" id="sparName" placeholder="z.B. Urlaub Italien">
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Zielbetrag (€)</label>
+        <input type="number" id="sparZiel" placeholder="2.000" min="0" step="1">
+      </div>
+      <div>
+        <label>Bereits gespart (€)</label>
+        <input type="number" id="sparAktuell" placeholder="500" min="0" step="1">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Monatliche Rate (€)</label>
+        <input type="number" id="sparRate" placeholder="200" min="0" step="1">
+      </div>
+      <div>
+        <label>Emoji</label>
+        <input type="text" id="sparEmoji" placeholder="✈️" maxlength="4">
+      </div>
+    </div>
+    <button class="btn btn-amber btn-full" onclick="addSparziel()">🎯 Sparziel anlegen</button>
+  </div>
+
+  <div id="sparZieleList"></div>
+</div>
+
+<!-- PAGE: VORSCHAU -->
+<div class="page" id="page-vorschau">
+  <div class="card">
+    <div class="card-title">📅 12-Monats-Übersicht</div>
+    <div class="month-stripe" id="monthStripe"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📊 Monatssaldo-Verlauf</div>
+    <div class="chart-wrap-tall"><canvas id="chartForecast"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">🗓️ Detailtabelle</div>
+    <div style="overflow-x:auto">
+      <table class="mini-table" id="forecastTable">
+        <thead><tr><th>Monat</th><th>Einnahmen</th><th>Ausgaben</th><th>Saldo</th><th>Kumuliert</th></tr></thead>
+        <tbody id="forecastBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ JAVASCRIPT ═══════════════════════════ -->
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────
+const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+const MONTHS_FULL = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+function defaultState() {
+  const now = new Date();
+  return {
+    currentMonthIdx: now.getMonth(),
+    currentYear: now.getFullYear(),
+    kategorien: [
+      {id:'k1', name:'Gehalt/Lohn',   typ:'einnahme', emoji:'💼'},
+      {id:'k2', name:'Nebenverdienst',typ:'einnahme', emoji:'💡'},
+      {id:'k3', name:'Sonstiges',     typ:'einnahme', emoji:'➕'},
+      {id:'k4', name:'Wohnen',        typ:'ausgabe',  emoji:'🏠'},
+      {id:'k5', name:'Mobilität',     typ:'ausgabe',  emoji:'🚗'},
+      {id:'k6', name:'Lebensmittel',  typ:'ausgabe',  emoji:'🛒'},
+      {id:'k7', name:'Versicherungen',typ:'ausgabe',  emoji:'🛡️'},
+      {id:'k8', name:'Kommunikation', typ:'ausgabe',  emoji:'📱'},
+      {id:'k9', name:'Freizeit',      typ:'ausgabe',  emoji:'🎉'},
+      {id:'k10',name:'Gesundheit',    typ:'ausgabe',  emoji:'🏥'},
+      {id:'k11',name:'Kleidung',      typ:'ausgabe',  emoji:'👗'},
+      {id:'k12',name:'Abonnements',   typ:'ausgabe',  emoji:'📺'},
+      {id:'k13',name:'Sparen',        typ:'ausgabe',  emoji:'🏦'},
+      {id:'k14',name:'Sonstiges',     typ:'ausgabe',  emoji:'📦'},
+    ],
+    einnahmen: [
+      {id:'e1', name:'Gehalt netto',    betrag:2800, kat:'k1', wdh:'monatlich',    abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'e2', name:'Kindergeld',      betrag:250,  kat:'k3', wdh:'monatlich',    abMonat:0, abJahr: new Date().getFullYear()},
+    ],
+    ausgaben: [
+      {id:'a1', name:'Miete + NK',      betrag:950,  kat:'k4', wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'a2', name:'KFZ-Versicherung',betrag:85,   kat:'k7', wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'a3', name:'Strom & Gas',     betrag:110,  kat:'k4', wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'a4', name:'Handy & Internet',betrag:55,   kat:'k8', wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'a5', name:'Lebensmittel',    betrag:350,  kat:'k6', wdh:'monatlich',    typ:'variabel', abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'a6', name:'Freizeit',        betrag:150,  kat:'k9', wdh:'monatlich',    typ:'variabel', abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'a7', name:'Streaming-Abos',  betrag:35,   kat:'k12',wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'a8', name:'Sparrate Notfonds',betrag:200, kat:'k13',wdh:'monatlich',    typ:'sparen',   abMonat:0, abJahr: new Date().getFullYear()},
+    ],
+    sparziele: [
+      {id:'s1', name:'Urlaub',     emoji:'✈️', ziel:2000, aktuell:400,  rate:150},
+      {id:'s2', name:'Neues Fahrrad',emoji:'🚴',ziel:800, aktuell:200, rate:80},
+    ]
+  };
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem('liqplaner_v2');
+    return raw ? JSON.parse(raw) : defaultState();
+  } catch(e) { return defaultState(); }
+}
+function save() { localStorage.setItem('liqplaner_v2', JSON.stringify(S)); }
+
+let S = load();
+let charts = {};
+
+// ─── HELPERS ─────────────────────────────────────────────────────────
+function uid() { return 'id_' + Math.random().toString(36).substr(2,9); }
+function fmt(v) { return (v||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
+function fmtShort(v) { return (v||0).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}) + ' €'; }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function getKatName(id) {
+  const k = S.kategorien.find(k=>k.id===id);
+  return k ? (k.emoji ? k.emoji+' '+k.name : k.name) : '–';
+}
+
+// Berechne Betrag für gegebenen Monat (0-11) + Jahr
+function betragImMonat(item, monatIdx, jahr) {
+  const ab   = item.abJahr * 12 + item.abMonat;
+  const ziel = jahr * 12 + monatIdx;
+  if (ziel < ab) return 0;
+  // Zeitliche Begrenzung: bisMonat / bisJahr
+  if (item.bisJahr !== undefined && item.bisJahr !== null && item.bisJahr !== '') {
+    const bis = item.bisJahr * 12 + (item.bisMonat || 0);
+    if (ziel > bis) return 0;
+  }
+  if (item.wdh === 'monatlich') return item.betrag;
+  if (item.wdh === 'einmalig')  return (ab === ziel) ? item.betrag : 0;
+  if (item.wdh === 'jaehrlich') return ((ziel - ab) % 12 === 0) ? item.betrag : 0;
+  if (item.wdh === 'quartalsweise') return ((ziel - ab) % 3 === 0) ? item.betrag : 0;
+  return 0;
+}
+
+function calcMonth(monatIdx, jahr) {
+  let ein = 0, aus = 0;
+  S.einnahmen.forEach(e => { ein += betragImMonat(e, monatIdx, jahr); });
+  S.ausgaben.forEach(a  => { aus += betragImMonat(a, monatIdx, jahr); });
+  return { ein, aus, saldo: ein - aus };
+}
+
+// Liefere Monatsdaten für 12 Monate ab currentMonth
+function get12Months() {
+  const arr = [];
+  for (let i = 0; i < 12; i++) {
+    let m = S.currentMonthIdx + i;
+    let y = S.currentYear + Math.floor(m / 12);
+    m = m % 12;
+    const data = calcMonth(m, y);
+    arr.push({ label: MONTHS[m] + ' ' + String(y).slice(2), labelFull: MONTHS_FULL[m] + ' ' + y, monat: m, jahr: y, ...data });
+  }
+  return arr;
+}
+
+// ─── NAVIGATION ──────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const tabs = ['dashboard','einnahmen','ausgaben','sparziele','vorschau','sichern'];
+  document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
+  renderAll();
+}
+
+function shiftMonth(dir) {
+  S.currentMonthIdx += dir;
+  if (S.currentMonthIdx > 11) { S.currentMonthIdx = 0; S.currentYear++; }
+  if (S.currentMonthIdx < 0)  { S.currentMonthIdx = 11; S.currentYear--; }
+  save(); renderAll();
+}
+
+// ─── RENDER ALL ──────────────────────────────────────────────────────
+function renderAll() {
+  updateHeader();
+  populateSelects();
+  renderDashboard();
+  renderEinnahmen();
+  renderAusgaben();
+  renderSparziele();
+  renderVorschau();
+}
+
+function updateHeader() {
+  document.getElementById('currentMonthLabel').textContent = MONTHS_FULL[S.currentMonthIdx] + ' ' + S.currentYear;
+  document.getElementById('headerSub').textContent = 'Stand: ' + new Date().toLocaleDateString('de-DE');
+}
+
+// ─── SELECTS POPULATE ────────────────────────────────────────────────
+function populateSelects() {
+  // Kategorien
+  const einKats = S.kategorien.filter(k=>k.typ==='einnahme');
+  const ausKats = S.kategorien.filter(k=>k.typ==='ausgabe');
+  fillSelect('einKat', einKats.map(k=>({v:k.id, l:(k.emoji?k.emoji+' ':'')+k.name})));
+  fillSelect('ausKat', ausKats.map(k=>({v:k.id, l:(k.emoji?k.emoji+' ':'')+k.name})));
+
+  // Monate (12 Monate ab jetzt)
+  const moOpts = [];
+  for (let i = 0; i < 12; i++) {
+    let m = S.currentMonthIdx + i, y = S.currentYear + Math.floor(m/12);
+    m = m % 12;
+    moOpts.push({v: m+'_'+y, l: MONTHS_FULL[m]+' '+y});
+  }
+  fillSelect('einMonat', moOpts);
+  fillSelect('ausMonat', moOpts);
+
+  // Bis-Monate (24 Monate Horizont für Ratenzahlungen)
+  const bisOpts = [];
+  for (let i = 0; i < 24; i++) {
+    let m = S.currentMonthIdx + i, y = S.currentYear + Math.floor(m/12);
+    m = m % 12;
+    bisOpts.push({v: m+'_'+y, l: MONTHS_FULL[m]+' '+y});
+  }
+  const einBis = document.getElementById('einBisMonat');
+  const ausBis = document.getElementById('ausBisMonat');
+  if (einBis) {
+    const cv = einBis.value;
+    einBis.innerHTML = '<option value="">Kein Ende</option>' + bisOpts.map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
+    if (cv) einBis.value = cv;
+  }
+  if (ausBis) {
+    const cv = ausBis.value;
+    ausBis.innerHTML = '<option value="">Kein Ende</option>' + bisOpts.map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
+    if (cv) ausBis.value = cv;
+  }
+}
+
+function fillSelect(id, opts) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const cur = el.value;
+  el.innerHTML = opts.map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
+  if (cur) el.value = cur;
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────
+function renderDashboard() {
+  const cur = calcMonth(S.currentMonthIdx, S.currentYear);
+  document.getElementById('kpiEin').textContent   = fmt(cur.ein);
+  document.getElementById('kpiAus').textContent   = fmt(cur.aus);
+  const salEl = document.getElementById('kpiSaldo');
+  salEl.textContent = fmt(cur.saldo);
+  salEl.className = 'kpi-value ' + (cur.saldo >= 0 ? 'pos' : 'neg');
+
+  // Warning Banner
+  const wb = document.getElementById('warnBanner');
+  if (cur.saldo < 0) {
+    wb.innerHTML = `<div class="warning-banner"><span class="warning-icon">⚠️</span><div><div class="warning-text">Negatives Monatssaldo: ${fmt(cur.saldo)}</div><div class="warning-sub">Deine Ausgaben übersteigen im aktuellen Monat die Einnahmen. Bitte Ausgaben prüfen.</div></div></div>`;
+  } else if (cur.saldo < cur.ein * 0.1) {
+    wb.innerHTML = `<div class="warning-banner"><span class="warning-icon">🟡</span><div><div class="warning-text">Geringes Monatssaldo: ${fmt(cur.saldo)}</div><div class="warning-sub">Weniger als 10% der Einnahmen bleiben übrig. Puffer für Unvorhergesehenes gering.</div></div></div>`;
+  } else {
+    wb.innerHTML = `<div class="warning-banner ok"><span class="warning-icon">✅</span><div><div class="warning-text">Saldo positiv: ${fmt(cur.saldo)}</div><div class="warning-sub">Super! Deine Finanzen sind diesen Monat im grünen Bereich.</div></div></div>`;
+  }
+
+  const months12 = get12Months();
+  const labels   = months12.map(m=>m.label);
+
+  // BAR CHART
+  destroyChart('chartBar');
+  charts['chartBar'] = new Chart(document.getElementById('chartBar').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Einnahmen', data: months12.map(m=>m.ein), backgroundColor: '#16a34a', borderRadius: 6 },
+        { label: 'Ausgaben', data: months12.map(m=>m.aus), backgroundColor: '#dc2626', borderRadius: 6 },
+      ]
+    },
+    options: chartOpts({ yPrefix: '€', stacked: false })
+  });
+
+  // DONUT
+  const catData = {};
+  S.ausgaben.forEach(a => {
+    const b = betragImMonat(a, S.currentMonthIdx, S.currentYear);
+    if (b > 0) {
+      const k = getKatName(a.kat);
+      catData[k] = (catData[k] || 0) + b;
+    }
+  });
+  const catLabels = Object.keys(catData);
+  const catVals   = Object.values(catData);
+  const palette   = ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2','#db2777','#059669','#ea580c','#4f46e5'];
+
+  destroyChart('chartDonut');
+  charts['chartDonut'] = new Chart(document.getElementById('chartDonut').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: catLabels,
+      datasets: [{ data: catVals, backgroundColor: palette.slice(0, catLabels.length), borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10, color: getComputedStyle(document.documentElement).getPropertyValue('--text') || '#1e293b' } },
+        tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.raw) } }
+      }
+    }
+  });
+
+  // LINE (kumuliert)
+  let kum = 0;
+  const kumData = months12.map(m => { kum += m.saldo; return +kum.toFixed(2); });
+  destroyChart('chartLine');
+  charts['chartLine'] = new Chart(document.getElementById('chartLine').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Kumuliertes Saldo',
+        data: kumData,
+        borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.12)',
+        fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: '#2563eb'
+      }]
+    },
+    options: chartOpts({ yPrefix: '€' })
+  });
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function chartOpts({ yPrefix = '', stacked = false } = {}) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { font: { size: 11 }, padding: 8 } },
+      tooltip: { callbacks: { label: ctx => ' ' + (yPrefix ? yPrefix + ' ' : '') + ctx.raw.toLocaleString('de-DE', {minimumFractionDigits:2,maximumFractionDigits:2}) } }
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 10 } }, stacked },
+      y: {
+        beginAtZero: true, stacked,
+        ticks: { font: { size: 10 }, callback: v => fmtShort(v) },
+        grid: { color: 'rgba(0,0,0,0.06)' }
+      }
+    }
+  };
+}
+
+// ─── EINNAHMEN ───────────────────────────────────────────────────────
+function addEinnahme() {
+  const name   = document.getElementById('einName').value.trim();
+  const betrag = parseFloat(document.getElementById('einBetrag').value);
+  const kat    = document.getElementById('einKat').value;
+  const wdh    = document.getElementById('einWdh').value;
+  const mo     = document.getElementById('einMonat').value.split('_');
+  if (!name || !betrag) { showToast('❌ Bitte Name und Betrag eingeben'); return; }
+  const bisEin = document.getElementById('einBisMonat').value;
+  const bisEinParts = bisEin ? bisEin.split('_') : null;
+  S.einnahmen.push({ id: uid(), name, betrag, kat, wdh,
+    abMonat: +mo[0], abJahr: +mo[1],
+    bisMonat: bisEinParts ? +bisEinParts[0] : null,
+    bisJahr:  bisEinParts ? +bisEinParts[1] : null
+  });
+  document.getElementById('einName').value = '';
+  document.getElementById('einBetrag').value = '';
+  save(); renderAll(); showToast('✅ Einnahme hinzugefügt');
+}
+
+function delEinnahme(id) {
+  S.einnahmen = S.einnahmen.filter(e=>e.id!==id);
+  save(); renderAll(); showToast('🗑️ Gelöscht');
+}
+
+function renderEinnahmen() {
+  const list = document.getElementById('einnahmenList');
+  if (!S.einnahmen.length) { list.innerHTML = '<p style="color:var(--muted);font-size:0.82rem;text-align:center;padding:16px">Noch keine Einnahmen erfasst.</p>'; return; }
+  list.innerHTML = S.einnahmen.map(e => {
+    const b = betragImMonat(e, S.currentMonthIdx, S.currentYear);
+    return `<div class="item income">
+      <div class="item-left">
+        <div class="item-name">${e.name}</div>
+        <div class="item-meta">${getKatName(e.kat)} · ${wdhLabel(e.wdh)} · ab ${MONTHS[e.abMonat]} ${e.abJahr}${e.bisJahr ? ' · bis ' + MONTHS[e.bisMonat] + ' ' + e.bisJahr : ''}${ablaufBadge(e, S.currentMonthIdx, S.currentYear)}</div>
+      </div>
+      <div class="item-right">
+        <div class="item-amount pos">${b>0?fmt(b):'–'}</div>
+        <button class="btn btn-danger btn-sm" onclick="delEinnahme('${e.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── AUSGABEN ────────────────────────────────────────────────────────
+function addAusgabe() {
+  const name   = document.getElementById('ausName').value.trim();
+  const betrag = parseFloat(document.getElementById('ausBetrag').value);
+  const kat    = document.getElementById('ausKat').value;
+  const typ    = document.getElementById('ausTyp').value;
+  const wdh    = document.getElementById('ausWdh').value;
+  const mo     = document.getElementById('ausMonat').value.split('_');
+  if (!name || !betrag) { showToast('❌ Bitte Name und Betrag eingeben'); return; }
+  const bisAus = document.getElementById('ausBisMonat').value;
+  const bisAusParts = bisAus ? bisAus.split('_') : null;
+  S.ausgaben.push({ id: uid(), name, betrag, kat, typ, wdh,
+    abMonat: +mo[0], abJahr: +mo[1],
+    bisMonat: bisAusParts ? +bisAusParts[0] : null,
+    bisJahr:  bisAusParts ? +bisAusParts[1] : null
+  });
+  document.getElementById('ausName').value = '';
+  document.getElementById('ausBetrag').value = '';
+  save(); renderAll(); showToast('✅ Ausgabe hinzugefügt');
+}
+
+function delAusgabe(id) {
+  S.ausgaben = S.ausgaben.filter(a=>a.id!==id);
+  save(); renderAll(); showToast('🗑️ Gelöscht');
+}
+
+function renderAusgaben() {
+  const list = document.getElementById('ausgabenList');
+  if (!S.ausgaben.length) { list.innerHTML = '<p style="color:var(--muted);font-size:0.82rem;text-align:center;padding:16px">Noch keine Ausgaben erfasst.</p>'; return; }
+  list.innerHTML = S.ausgaben.map(a => {
+    const b = betragImMonat(a, S.currentMonthIdx, S.currentYear);
+    const badge = a.typ === 'fix' ? '<span class="badge badge-fix">Fix</span>'
+                : a.typ === 'sparen' ? '<span class="badge badge-spar">Spar</span>'
+                : '<span class="badge badge-var">Var</span>';
+    return `<div class="item expense">
+      <div class="item-left">
+        <div class="item-name">${a.name} ${badge}</div>
+        <div class="item-meta">${getKatName(a.kat)} · ${wdhLabel(a.wdh)} · ab ${MONTHS[a.abMonat]} ${a.abJahr}${a.bisJahr ? ' · bis ' + MONTHS[a.bisMonat] + ' ' + a.bisJahr : ''}${ablaufBadge(a, S.currentMonthIdx, S.currentYear)}</div>
+      </div>
+      <div class="item-right">
+        <div class="item-amount neg">${b>0?fmt(b):'–'}</div>
+        <button class="btn btn-danger btn-sm" onclick="delAusgabe('${a.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function wdhLabel(w) {
+  return {monatlich:'monatlich',einmalig:'einmalig',jaehrlich:'jährlich',quartalsweise:'quartalsweise'}[w]||w;
+}
+
+// ─── SPARZIELE ───────────────────────────────────────────────────────
+function addSparziel() {
+  const name    = document.getElementById('sparName').value.trim();
+  const ziel    = parseFloat(document.getElementById('sparZiel').value)||0;
+  const aktuell = parseFloat(document.getElementById('sparAktuell').value)||0;
+  const rate    = parseFloat(document.getElementById('sparRate').value)||0;
+  const emoji   = document.getElementById('sparEmoji').value.trim()||'🎯';
+  if (!name || !ziel) { showToast('❌ Bitte Name und Zielbetrag eingeben'); return; }
+  S.sparziele.push({ id: uid(), name, ziel, aktuell, rate, emoji });
+  document.getElementById('sparName').value = '';
+  document.getElementById('sparZiel').value = '';
+  document.getElementById('sparAktuell').value = '';
+  document.getElementById('sparRate').value = '';
+  document.getElementById('sparEmoji').value = '';
+  save(); renderAll(); showToast('🎯 Sparziel angelegt');
+}
+
+function delSparziel(id) {
+  S.sparziele = S.sparziele.filter(s=>s.id!==id);
+  save(); renderAll(); showToast('🗑️ Gelöscht');
+}
+
+function updateSparziel(id, delta) {
+  const s = S.sparziele.find(s=>s.id===id);
+  if (!s) return;
+  s.aktuell = Math.max(0, Math.min(s.ziel, s.aktuell + delta));
+  save(); renderAll();
+}
+
+function renderSparziele() {
+  const cont = document.getElementById('sparZieleList');
+  if (!S.sparziele.length) {
+    cont.innerHTML = '<div class="card"><p style="color:var(--muted);font-size:0.82rem;text-align:center;padding:8px">Noch keine Sparziele angelegt.</p></div>';
+    return;
+  }
+  cont.innerHTML = S.sparziele.map(s => {
+    const pct   = Math.min(100, (s.aktuell / s.ziel) * 100);
+    const rest  = Math.max(0, s.ziel - s.aktuell);
+    const monate = s.rate > 0 ? Math.ceil(rest / s.rate) : '–';
+    const barCls = pct >= 100 ? 'over' : pct >= 70 ? '' : 'warn';
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-size:1.1rem;font-weight:800">${s.emoji} ${s.name}</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">${fmt(s.aktuell)} von ${fmt(s.ziel)} · Noch ${fmt(rest)}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="delSparziel('${s.id}')">🗑️</button>
+      </div>
+      <div class="progress-wrap"><div class="progress-bar ${barCls}" style="width:${pct}%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--muted);margin-top:2px">
+        <span>${pct.toFixed(0)}% erreicht</span>
+        <span>${s.rate>0 ? 'ca. '+monate+' Monate' : 'Keine Rate'}</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-success" onclick="updateSparziel('${s.id}', ${s.rate||50})">+ ${fmt(s.rate||50)} einzahlen</button>
+        <button class="btn btn-sm" style="background:var(--bg);color:var(--muted);border:1px solid var(--border)" onclick="updateSparziel('${s.id}', -(s.rate||50))">− Entnehmen</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── VORSCHAU ────────────────────────────────────────────────────────
+function renderVorschau() {
+  const months = get12Months();
+  let kum = 0;
+
+  // Month stripe
+  const stripe = document.getElementById('monthStripe');
+  stripe.innerHTML = months.map((m,i) => {
+    const cls = i === 0 ? 'month-dot active' : 'month-dot';
+    const color = m.saldo >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<div class="${cls}" style="background:var(--card);border-color:${i===0?'var(--blue)':'var(--border)'}">
+      <div style="font-size:0.62rem;color:var(--muted)">${m.label.split(' ')[0]}</div>
+      <div style="font-size:0.62rem;color:var(--muted)">${m.label.split(' ')[1]}</div>
+      <div class="md-saldo" style="color:${color}">${m.saldo>=0?'+':''} ${fmtShort(m.saldo).replace(' €','')}</div>
+    </div>`;
+  }).join('');
+
+  // Forecast chart
+  const kumData = [];
+  let k = 0;
+  months.forEach(m => { k += m.saldo; kumData.push(+k.toFixed(2)); });
+
+  destroyChart('chartForecast');
+  charts['chartForecast'] = new Chart(document.getElementById('chartForecast').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: months.map(m=>m.label),
+      datasets: [
+        { label: 'Einnahmen', data: months.map(m=>m.ein), backgroundColor: 'rgba(22,163,74,0.7)', borderRadius: 4, order: 2 },
+        { label: 'Ausgaben', data: months.map(m=>m.aus), backgroundColor: 'rgba(220,38,38,0.7)', borderRadius: 4, order: 2 },
+        { label: 'Kum. Saldo', data: kumData, type: 'line', borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.08)', fill: true, tension: 0.3, pointRadius: 4, yAxisID: 'y1', order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { font: { size: 10 }, padding: 8 } }, tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.raw) } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { beginAtZero: true, ticks: { callback: v=>fmtShort(v), font:{size:10} }, grid:{color:'rgba(0,0,0,0.05)'} },
+        y1: { position: 'right', beginAtZero: false, ticks:{callback:v=>fmtShort(v),font:{size:10}}, grid:{display:false} }
+      }
+    }
+  });
+
+  // Table
+  kum = 0;
+  const tbody = document.getElementById('forecastBody');
+  tbody.innerHTML = months.map(m => {
+    kum += m.saldo;
+    const saldoCls = m.saldo >= 0 ? 'pos' : 'neg';
+    const kumCls   = kum >= 0 ? 'pos' : 'neg';
+    return `<tr>
+      <td style="white-space:nowrap">${m.labelFull}</td>
+      <td class="pos">${fmt(m.ein)}</td>
+      <td class="neg">${fmt(m.aus)}</td>
+      <td class="${saldoCls}" style="font-weight:700">${fmt(m.saldo)}</td>
+      <td class="${kumCls}" style="font-weight:700">${fmt(kum)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── KATEGORIEN MODAL ────────────────────────────────────────────────
+function openCatModal(typ) {
+  document.getElementById('newCatType').value = typ;
+  document.getElementById('catModal').classList.add('open');
+}
+function closeCatModal() { document.getElementById('catModal').classList.remove('open'); }
+function saveCategory() {
+  const name  = document.getElementById('newCatName').value.trim();
+  const typ   = document.getElementById('newCatType').value;
+  const emoji = document.getElementById('newCatEmoji').value.trim();
+  if (!name) { showToast('❌ Bitte Kategoriename eingeben'); return; }
+  S.kategorien.push({ id: uid(), name, typ, emoji });
+  document.getElementById('newCatName').value = '';
+  document.getElementById('newCatEmoji').value = '';
+  save(); closeCatModal(); renderAll(); showToast('✅ Kategorie angelegt');
+}
+
+// Tap outside modal to close
+document.getElementById('catModal').addEventListener('click', function(e) {
+  if (e.target === this) closeCatModal();
+});
+
+
+// ─── EXPORT / IMPORT / RESET ─────────────────────────────────────────
+
+function exportJSON() {
+  const data = JSON.stringify(S, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = 'liquiditaetsplaner_backup_' + date + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('✅ Backup gespeichert');
+}
+
+function exportHTML() {
+  // Lese die aktuelle HTML-Seite aus und bette Daten ein
+  const htmlSource = document.documentElement.outerHTML;
+  // Ersetze defaultState() durch eine Version die direkt unsere Daten zurückgibt
+  const dataStr = JSON.stringify(S);
+  const patched = htmlSource.replace(
+    /function load\(\) \{[\s\S]*?catch\(e\) \{ return defaultState\(\); \}\s*\}/,
+    'function load() { return ' + dataStr + '; }'
+  );
+  const blob = new Blob([patched], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = 'liquiditaetsplaner_' + date + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('✅ HTML-Datei gespeichert');
+}
+
+function importJSON() {
+  const file = document.getElementById('importFile').files[0];
+  if (!file) { showToast('❌ Bitte zuerst eine Datei auswählen'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const imported = JSON.parse(e.target.result);
+      // Validierung: Mindestfelder prüfen
+      if (!imported.einnahmen || !imported.ausgaben || !imported.kategorien) {
+        showToast('❌ Ungültige Backup-Datei'); return;
+      }
+      if (!confirm('Aktuelle Daten wirklich durch das Backup ersetzen?')) return;
+      S = imported;
+      save();
+      renderAll();
+      showToast('✅ Backup erfolgreich geladen');
+    } catch(err) {
+      showToast('❌ Datei konnte nicht gelesen werden');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function resetData() {
+  if (!confirm('Wirklich alle Daten zurücksetzen? Das kann nicht rückgängig gemacht werden.')) return;
+  S = defaultState();
+  save();
+  renderAll();
+  showToast('🔄 Daten zurückgesetzt');
+}
+
+
+// ─── ABLAUF-BADGE ─────────────────────────────────────────────────────
+function ablaufBadge(item, curMonat, curJahr) {
+  if (!item.bisJahr) return '';
+  const bis  = item.bisJahr * 12 + item.bisMonat;
+  const cur  = curJahr * 12 + curMonat;
+  const diff = bis - cur; // Monate bis Ablauf
+  if (diff < 0)  return ' <span style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:1px 6px;font-size:0.68rem;font-weight:700">✅ Abgelaufen</span>';
+  if (diff === 0) return ' <span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 6px;font-size:0.68rem;font-weight:700">⏰ Läuft ab</span>';
+  if (diff <= 2)  return ` <span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 6px;font-size:0.68rem;font-weight:700">⚠️ Noch ${diff} Mon.</span>`;
+  return '';
+}
+
+
+// ─── PWA: SERVICE WORKER ──────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ─── PWA: INSTALL BANNER (iOS Hinweis) ───────────────────────────────
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+function isInStandaloneMode() {
+  return ('standalone' in window.navigator) && window.navigator.standalone;
+}
+
+window.addEventListener('load', () => {
+  // Nur anzeigen wenn iOS + noch nicht installiert + noch nicht weggeklickt
+  if (isIOS() && !isInStandaloneMode() && !localStorage.getItem('pwa_hint_dismissed')) {
+    const banner = document.getElementById('iosBanner');
+    if (banner) {
+      banner.style.display = 'flex';
+    }
+  }
+
+  // Android / Chrome: beforeinstallprompt
+  let deferredPrompt;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const btn = document.getElementById('installBtn');
+    if (btn) {
+      btn.style.display = 'inline-flex';
+      btn.addEventListener('click', () => {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => { btn.style.display = 'none'; });
+      });
+    }
+  });
+});
+
+function dismissIOSBanner() {
+  localStorage.setItem('pwa_hint_dismissed', '1');
+  const banner = document.getElementById('iosBanner');
+  if (banner) banner.style.display = 'none';
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────
+renderAll();
+</script>
+
+<!-- PAGE: SICHERN -->
+<div class="page" id="page-sichern">
+
+  <!-- JSON Export -->
+  <div class="card">
+    <div class="card-title">📤 Daten exportieren</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Speichere alle deine Einnahmen, Ausgaben, Sparziele und Kategorien als <strong>JSON-Datei</strong> auf deinem Gerät.
+      Lege sie anschließend in iCloud, Google Drive oder einem anderen sicheren Ort ab.
+    </p>
+    <button class="btn btn-primary btn-full" onclick="exportJSON()">📥 JSON-Backup herunterladen</button>
+  </div>
+
+  <!-- HTML Export -->
+  <div class="card">
+    <div class="card-title">🗂️ Komplette App exportieren</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Erstellt eine <strong>neue HTML-Datei</strong> mit all deinen Daten bereits eingebettet.
+      Perfekt um das Tool auf ein anderes Gerät zu übertragen – einfach Datei öffnen, fertig.
+    </p>
+    <button class="btn btn-success btn-full" onclick="exportHTML()">💾 HTML-Datei mit Daten speichern</button>
+  </div>
+
+  <!-- JSON Import -->
+  <div class="card">
+    <div class="card-title">📂 Daten importieren</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Stelle ein vorhandenes JSON-Backup wieder her. <strong>Achtung:</strong> Die aktuellen Daten werden dabei überschrieben.
+      Sichere vorher deine aktuellen Daten per Export.
+    </p>
+    <div style="margin-bottom:10px">
+      <label>JSON-Backup-Datei auswählen</label>
+      <input type="file" id="importFile" accept=".json" style="padding:8px;border:1.5px dashed var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:0.85rem">
+    </div>
+    <button class="btn btn-amber btn-full" onclick="importJSON()">📂 Backup laden &amp; wiederherstellen</button>
+  </div>
+
+  <!-- Daten zurücksetzen -->
+  <div class="card" style="border:1.5px solid #fca5a5">
+    <div class="card-title" style="color:var(--red)">⚠️ Daten zurücksetzen</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Setzt alle Daten auf die <strong>Beispiel-Standardwerte</strong> zurück. Diese Aktion kann nicht rückgängig gemacht werden.
+      Bitte vorher ein Backup erstellen!
+    </p>
+    <button class="btn btn-danger btn-full" onclick="resetData()">🗑️ Alle Daten zurücksetzen</button>
+  </div>
+
+  <!-- Info Box -->
+  <div class="card" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid #bfdbfe">
+    <div class="card-title" style="color:#1e40af">💡 Empfohlene Backup-Routine</div>
+    <div style="font-size:0.82rem;color:#1e40af;line-height:1.6">
+      <div>📅 <strong>Monatlich:</strong> JSON-Backup herunterladen</div>
+      <div style="margin-top:6px">☁️ <strong>Speicherort:</strong> iCloud Drive, Google Drive oder USB-Stick</div>
+      <div style="margin-top:6px">📱 <strong>Geräteübertragung:</strong> HTML-Export verwenden</div>
+      <div style="margin-top:6px">🔄 <strong>Nach jedem Wechsel:</strong> JSON importieren</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
