@@ -560,11 +560,12 @@ function defaultState() {
 }
 
 function load() {
+  const embedded = document.getElementById('embedded-data');
+  if (embedded && embedded.textContent.trim()) {
+    try { return JSON.parse(embedded.textContent); } catch(e) {}
+    // malformed embedded-data: fall through to localStorage
+  }
   try {
-    const embedded = document.getElementById('embedded-data');
-    if (embedded && embedded.textContent.trim()) {
-      return JSON.parse(embedded.textContent);
-    }
     const raw = localStorage.getItem('liqplaner_v2');
     return raw ? JSON.parse(raw) : defaultState();
   } catch(e) { return defaultState(); }
@@ -710,7 +711,7 @@ function fillSelect(id, opts) {
   const el = document.getElementById(id);
   if (!el) return;
   const cur = el.value;
-  el.innerHTML = opts.map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
+  el.innerHTML = opts.map(o=>`<option value="${sanitize(o.v)}">${sanitize(o.l)}</option>`).join('');
   if (cur) el.value = cur;
 }
 
@@ -1079,7 +1080,7 @@ function exportJSON() {
 }
 
 function exportHTML() {
-  const dataStr = JSON.stringify(S);
+  const dataStr = JSON.stringify(S).replace(/<\/script>/gi, '<\\/script>');
   const htmlSource = document.documentElement.outerHTML;
   const cleaned = htmlSource.replace(/<script id="embedded-data"[^>]*>[\s\S]*?<\/script>/i, '');
   const patched = cleaned.replace('</body>',
