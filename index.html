@@ -371,6 +371,7 @@
   <div class="tab active" onclick="showPage('dashboard')"><span class="tab-icon">📊</span>Übersicht</div>
   <div class="tab" onclick="showPage('einnahmen')"><span class="tab-icon">💵</span>Einnahmen</div>
   <div class="tab" onclick="showPage('ausgaben')"><span class="tab-icon">💸</span>Ausgaben</div>
+  <div class="tab" onclick="showPage('buchungen')"><span class="tab-icon">📒</span>Buchungen</div>
   <div class="tab" onclick="showPage('sparziele')"><span class="tab-icon">🎯</span>Sparziele</div>
   <div class="tab" onclick="showPage('vorschau')"><span class="tab-icon">📅</span>Vorschau</div>
   <div class="tab" onclick="showPage('sichern')"><span class="tab-icon">💾</span>Sichern</div>
@@ -398,6 +399,19 @@
     <div class="form-full">
       <label>Emoji (optional)</label>
       <input type="text" id="newCatEmoji" placeholder="🐶" maxlength="4">
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Budget <span style="font-weight:400;color:var(--muted)">(opt.)</span></label>
+        <input type="number" id="newCatBudget" placeholder="z.B. 200" min="0" step="1">
+      </div>
+      <div>
+        <label>Budget-Typ</label>
+        <select id="newCatBudgetTyp">
+          <option value="monatlich">Monatlich</option>
+          <option value="jaehrlich">Jährlich</option>
+        </select>
+      </div>
     </div>
     <button class="btn btn-primary btn-full" onclick="saveCategory()">✅ Kategorie speichern</button>
   </div>
@@ -472,6 +486,13 @@
       </div>
       <div></div>
     </div>
+    <div class="form-row">
+      <div>
+        <label>Fällig am Tag <span style="font-weight:400;color:var(--muted)">(opt. 1–31)</span></label>
+        <input type="number" id="einFaelligTag" placeholder="z.B. 15" min="1" max="31">
+      </div>
+      <div></div>
+    </div>
     <button class="btn btn-success btn-full" onclick="addEinnahme()">✅ Einnahme hinzufügen</button>
   </div>
 
@@ -533,6 +554,13 @@
         <select id="ausBisMonat"><option value="">Kein Ende</option></select>
       </div>
     </div>
+    <div class="form-row">
+      <div>
+        <label>Fällig am Tag <span style="font-weight:400;color:var(--muted)">(opt. 1–31)</span></label>
+        <input type="number" id="ausFaelligTag" placeholder="z.B. 1" min="1" max="31">
+      </div>
+      <div></div>
+    </div>
     <button class="btn btn-danger btn-full" onclick="addAusgabe()">➕ Ausgabe hinzufügen</button>
   </div>
 
@@ -543,6 +571,11 @@
     </div>
     <div class="item-list" id="ausgabenList"></div>
   </div>
+</div>
+
+<!-- PAGE: BUCHUNGEN -->
+<div class="page" id="page-buchungen">
+  <!-- Wird in Task 8 befüllt -->
 </div>
 
 <!-- PAGE: SPARZIELE -->
@@ -753,8 +786,9 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
-  const tabs = ['dashboard','einnahmen','ausgaben','sparziele','vorschau','sichern'];
-  document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
+  const tabs = ['dashboard','einnahmen','ausgaben','buchungen','sparziele','vorschau','sichern'];
+  const idx = tabs.indexOf(id);
+  if (idx >= 0) document.querySelectorAll('.tab')[idx].classList.add('active');
   renderAll();
 }
 
@@ -772,6 +806,7 @@ function renderAll() {
   renderDashboard();
   renderEinnahmen();
   renderAusgaben();
+  renderBuchungen();
   renderSparziele();
   renderVorschau();
 }
@@ -945,13 +980,16 @@ function addEinnahme() {
   if (!name || !betrag) { showToast('❌ Bitte Name und Betrag eingeben'); return; }
   const bisEin = document.getElementById('einBisMonat').value;
   const bisEinParts = bisEin ? bisEin.split('_') : null;
+  const faelligTag = parseInt(document.getElementById('einFaelligTag').value) || null;
   S.einnahmen.push({ id: uid(), name, betrag, kat, wdh,
     abMonat: +mo[0], abJahr: +mo[1],
     bisMonat: bisEinParts ? +bisEinParts[0] : null,
-    bisJahr:  bisEinParts ? +bisEinParts[1] : null
+    bisJahr:  bisEinParts ? +bisEinParts[1] : null,
+    faelligTag
   });
   document.getElementById('einName').value = '';
   document.getElementById('einBetrag').value = '';
+  document.getElementById('einFaelligTag').value = '';
   save(); renderAll(); showToast('✅ Einnahme hinzugefügt');
 }
 
@@ -989,13 +1027,16 @@ function addAusgabe() {
   if (!name || !betrag) { showToast('❌ Bitte Name und Betrag eingeben'); return; }
   const bisAus = document.getElementById('ausBisMonat').value;
   const bisAusParts = bisAus ? bisAus.split('_') : null;
+  const faelligTag = parseInt(document.getElementById('ausFaelligTag').value) || null;
   S.ausgaben.push({ id: uid(), name, betrag, kat, typ, wdh,
     abMonat: +mo[0], abJahr: +mo[1],
     bisMonat: bisAusParts ? +bisAusParts[0] : null,
-    bisJahr:  bisAusParts ? +bisAusParts[1] : null
+    bisJahr:  bisAusParts ? +bisAusParts[1] : null,
+    faelligTag
   });
   document.getElementById('ausName').value = '';
   document.getElementById('ausBetrag').value = '';
+  document.getElementById('ausFaelligTag').value = '';
   save(); renderAll(); showToast('✅ Ausgabe hinzugefügt');
 }
 
@@ -1023,6 +1064,12 @@ function renderAusgaben() {
       </div>
     </div>`;
   }).join('');
+}
+
+function renderBuchungen() {
+  const cont = document.getElementById('page-buchungen');
+  if (!cont) return;
+  // Implementierung folgt in Task 8
 }
 
 function wdhLabel(w) {
@@ -1159,13 +1206,16 @@ function openCatModal(typ) {
 }
 function closeCatModal() { document.getElementById('catModal').classList.remove('open'); }
 function saveCategory() {
-  const name  = document.getElementById('newCatName').value.trim();
-  const typ   = document.getElementById('newCatType').value;
-  const emoji = document.getElementById('newCatEmoji').value.trim();
+  const name      = document.getElementById('newCatName').value.trim();
+  const typ       = document.getElementById('newCatType').value;
+  const emoji     = document.getElementById('newCatEmoji').value.trim();
+  const budget    = parseFloat(document.getElementById('newCatBudget').value) || null;
+  const budgetTyp = document.getElementById('newCatBudgetTyp').value;
   if (!name) { showToast('❌ Bitte Kategoriename eingeben'); return; }
-  S.kategorien.push({ id: uid(), name, typ, emoji });
-  document.getElementById('newCatName').value = '';
-  document.getElementById('newCatEmoji').value = '';
+  S.kategorien.push({ id: uid(), name, typ, emoji, budget, budgetTyp });
+  document.getElementById('newCatName').value   = '';
+  document.getElementById('newCatEmoji').value  = '';
+  document.getElementById('newCatBudget').value = '';
   save(); closeCatModal(); renderAll(); showToast('✅ Kategorie angelegt');
 }
 
