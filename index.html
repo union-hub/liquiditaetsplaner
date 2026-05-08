@@ -724,6 +724,95 @@
   </div>
 </div>
 
+<!-- PAGE: SICHERN -->
+<div class="page" id="page-sichern">
+
+  <!-- Kontostand -->
+  <div class="card" style="background:var(--teal-bg)">
+    <div class="card-title" style="color:var(--teal)">🏦 Aktueller Kontostand</div>
+    <p style="font-size:0.82rem;color:var(--text);margin-bottom:12px;line-height:1.5">
+      Gib deinen aktuellen Kontostand ein. Das Tool berechnet daraus den projizierten Kontostand und die Notfallreserve.
+    </p>
+    <div class="form-row">
+      <div>
+        <label>Kontostand (€)</label>
+        <input type="number" id="kontostandInput" placeholder="z.B. 4280" step="0.01">
+      </div>
+      <div>
+        <label>Stand vom (Datum)</label>
+        <input type="date" id="kontostandDatum">
+      </div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="saveKontostand()">💾 Kontostand speichern</button>
+  </div>
+
+  <!-- JSON Export -->
+  <div class="card">
+    <div class="card-title">📤 Daten exportieren</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Speichere alle deine Einnahmen, Ausgaben, Sparziele und Kategorien als <strong>JSON-Datei</strong> auf deinem Gerät.
+      Lege sie anschließend in iCloud, Google Drive oder einem anderen sicheren Ort ab.
+    </p>
+    <button class="btn btn-primary btn-full" onclick="exportJSON()">📥 JSON-Backup herunterladen</button>
+  </div>
+
+  <!-- CSV Export -->
+  <div class="card">
+    <div class="card-title">📊 CSV-Export</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Exportiere deine Buchungen oder Planungseinträge als <strong>CSV-Datei</strong> für Excel, Google Sheets oder andere Auswertungstools.
+    </p>
+    <button class="btn btn-primary btn-full" onclick="exportCSV('buchungen')" style="margin-bottom:8px">📥 Buchungen als CSV</button>
+    <button class="btn btn-sm btn-full" style="background:var(--cream);color:var(--teal);border:1.5px solid var(--teal)" onclick="exportCSV('planung')">📥 Planungseinträge als CSV</button>
+  </div>
+
+  <!-- HTML Export -->
+  <div class="card">
+    <div class="card-title">🗂️ Komplette App exportieren</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Erstellt eine <strong>neue HTML-Datei</strong> mit all deinen Daten bereits eingebettet.
+      Perfekt um das Tool auf ein anderes Gerät zu übertragen – einfach Datei öffnen, fertig.
+    </p>
+    <button class="btn btn-success btn-full" onclick="exportHTML()">💾 HTML-Datei mit Daten speichern</button>
+  </div>
+
+  <!-- JSON Import -->
+  <div class="card">
+    <div class="card-title">📂 Daten importieren</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Stelle ein vorhandenes JSON-Backup wieder her. <strong>Achtung:</strong> Die aktuellen Daten werden dabei überschrieben.
+      Sichere vorher deine aktuellen Daten per Export.
+    </p>
+    <div style="margin-bottom:10px">
+      <label>JSON-Backup-Datei auswählen</label>
+      <input type="file" id="importFile" accept=".json" style="padding:8px;border:1.5px dashed var(--border);border-radius:10px;background:var(--cream);color:var(--text);font-size:0.85rem">
+    </div>
+    <button class="btn btn-amber btn-full" onclick="importJSON()">📂 Backup laden &amp; wiederherstellen</button>
+  </div>
+
+  <!-- Daten zurücksetzen -->
+  <div class="card" style="border:1.5px solid #fca5a5">
+    <div class="card-title" style="color:var(--red)">⚠️ Daten zurücksetzen</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Setzt alle Daten auf die <strong>Beispiel-Standardwerte</strong> zurück. Diese Aktion kann nicht rückgängig gemacht werden.
+      Bitte vorher ein Backup erstellen!
+    </p>
+    <button class="btn btn-danger btn-full" onclick="resetData()">🗑️ Alle Daten zurücksetzen</button>
+  </div>
+
+  <!-- Info Box -->
+  <div class="card" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid #bfdbfe">
+    <div class="card-title" style="color:#1e40af">💡 Empfohlene Backup-Routine</div>
+    <div style="font-size:0.82rem;color:#1e40af;line-height:1.6">
+      <div>📅 <strong>Monatlich:</strong> JSON-Backup herunterladen</div>
+      <div style="margin-top:6px">☁️ <strong>Speicherort:</strong> iCloud Drive, Google Drive oder USB-Stick</div>
+      <div style="margin-top:6px">📱 <strong>Geräteübertragung:</strong> HTML-Export verwenden</div>
+      <div style="margin-top:6px">🔄 <strong>Nach jedem Wechsel:</strong> JSON importieren</div>
+    </div>
+  </div>
+
+</div>
+
 <!-- ═══════════════════════════ JAVASCRIPT ═══════════════════════════ -->
 <script>
 // ─── STATE ───────────────────────────────────────────────────────────
@@ -1832,95 +1921,6 @@ function dismissIOSBanner() {
 // ─── INIT ────────────────────────────────────────────────────────────
 renderAll();
 </script>
-
-<!-- PAGE: SICHERN -->
-<div class="page" id="page-sichern">
-
-  <!-- Kontostand -->
-  <div class="card" style="background:var(--teal-bg)">
-    <div class="card-title" style="color:var(--teal)">🏦 Aktueller Kontostand</div>
-    <p style="font-size:0.82rem;color:var(--text);margin-bottom:12px;line-height:1.5">
-      Gib deinen aktuellen Kontostand ein. Das Tool berechnet daraus den projizierten Kontostand und die Notfallreserve.
-    </p>
-    <div class="form-row">
-      <div>
-        <label>Kontostand (€)</label>
-        <input type="number" id="kontostandInput" placeholder="z.B. 4280" step="0.01">
-      </div>
-      <div>
-        <label>Stand vom (Datum)</label>
-        <input type="date" id="kontostandDatum">
-      </div>
-    </div>
-    <button class="btn btn-primary btn-full" onclick="saveKontostand()">💾 Kontostand speichern</button>
-  </div>
-
-  <!-- JSON Export -->
-  <div class="card">
-    <div class="card-title">📤 Daten exportieren</div>
-    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Speichere alle deine Einnahmen, Ausgaben, Sparziele und Kategorien als <strong>JSON-Datei</strong> auf deinem Gerät.
-      Lege sie anschließend in iCloud, Google Drive oder einem anderen sicheren Ort ab.
-    </p>
-    <button class="btn btn-primary btn-full" onclick="exportJSON()">📥 JSON-Backup herunterladen</button>
-  </div>
-
-  <!-- CSV Export -->
-  <div class="card">
-    <div class="card-title">📊 CSV-Export</div>
-    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Exportiere deine Buchungen oder Planungseinträge als <strong>CSV-Datei</strong> für Excel, Google Sheets oder andere Auswertungstools.
-    </p>
-    <button class="btn btn-primary btn-full" onclick="exportCSV('buchungen')" style="margin-bottom:8px">📥 Buchungen als CSV</button>
-    <button class="btn btn-sm btn-full" style="background:var(--cream);color:var(--teal);border:1.5px solid var(--teal)" onclick="exportCSV('planung')">📥 Planungseinträge als CSV</button>
-  </div>
-
-  <!-- HTML Export -->
-  <div class="card">
-    <div class="card-title">🗂️ Komplette App exportieren</div>
-    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Erstellt eine <strong>neue HTML-Datei</strong> mit all deinen Daten bereits eingebettet.
-      Perfekt um das Tool auf ein anderes Gerät zu übertragen – einfach Datei öffnen, fertig.
-    </p>
-    <button class="btn btn-success btn-full" onclick="exportHTML()">💾 HTML-Datei mit Daten speichern</button>
-  </div>
-
-  <!-- JSON Import -->
-  <div class="card">
-    <div class="card-title">📂 Daten importieren</div>
-    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Stelle ein vorhandenes JSON-Backup wieder her. <strong>Achtung:</strong> Die aktuellen Daten werden dabei überschrieben.
-      Sichere vorher deine aktuellen Daten per Export.
-    </p>
-    <div style="margin-bottom:10px">
-      <label>JSON-Backup-Datei auswählen</label>
-      <input type="file" id="importFile" accept=".json" style="padding:8px;border:1.5px dashed var(--border);border-radius:10px;background:var(--cream);color:var(--text);font-size:0.85rem">
-    </div>
-    <button class="btn btn-amber btn-full" onclick="importJSON()">📂 Backup laden &amp; wiederherstellen</button>
-  </div>
-
-  <!-- Daten zurücksetzen -->
-  <div class="card" style="border:1.5px solid #fca5a5">
-    <div class="card-title" style="color:var(--red)">⚠️ Daten zurücksetzen</div>
-    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Setzt alle Daten auf die <strong>Beispiel-Standardwerte</strong> zurück. Diese Aktion kann nicht rückgängig gemacht werden.
-      Bitte vorher ein Backup erstellen!
-    </p>
-    <button class="btn btn-danger btn-full" onclick="resetData()">🗑️ Alle Daten zurücksetzen</button>
-  </div>
-
-  <!-- Info Box -->
-  <div class="card" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid #bfdbfe">
-    <div class="card-title" style="color:#1e40af">💡 Empfohlene Backup-Routine</div>
-    <div style="font-size:0.82rem;color:#1e40af;line-height:1.6">
-      <div>📅 <strong>Monatlich:</strong> JSON-Backup herunterladen</div>
-      <div style="margin-top:6px">☁️ <strong>Speicherort:</strong> iCloud Drive, Google Drive oder USB-Stick</div>
-      <div style="margin-top:6px">📱 <strong>Geräteübertragung:</strong> HTML-Export verwenden</div>
-      <div style="margin-top:6px">🔄 <strong>Nach jedem Wechsel:</strong> JSON importieren</div>
-    </div>
-  </div>
-
-</div>
 
 </body>
 </html>
