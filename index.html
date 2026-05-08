@@ -422,25 +422,57 @@
 <!-- PAGE: DASHBOARD -->
 <div class="page active" id="page-dashboard">
   <div id="warnBanner"></div>
+
+  <!-- KPI Row -->
   <div class="kpi-row">
     <div class="kpi"><div class="kpi-label">Einnahmen</div><div class="kpi-value pos" id="kpiEin">–</div></div>
     <div class="kpi"><div class="kpi-label">Ausgaben</div><div class="kpi-value neg" id="kpiAus">–</div></div>
-    <div class="kpi"><div class="kpi-label">Saldo</div><div class="kpi-value" id="kpiSaldo">–</div></div>
+    <div class="kpi"><div class="kpi-label">Kontostand</div><div class="kpi-value" id="kpiKonto">–</div></div>
   </div>
 
+  <!-- Tinted 2-col: Notfallreserve + Sparziele -->
+  <div class="widget-grid">
+    <div class="widget-teal">
+      <div class="widget-label" style="color:var(--teal)">Notfallreserve</div>
+      <div class="widget-value" id="wNotfallValue">–</div>
+      <div class="progress-wrap"><div class="progress-bar" id="wNotfallBar" style="width:0%"></div></div>
+      <div class="widget-sub" id="wNotfallSub"></div>
+    </div>
+    <div class="widget-cream">
+      <div class="widget-label" style="color:#5a5e10">Sparziele</div>
+      <div class="widget-value" id="wSparValue">–</div>
+      <div id="wSparList" style="margin-top:6px;display:flex;flex-direction:column;gap:3px"></div>
+    </div>
+  </div>
+
+  <!-- Bar Chart -->
   <div class="card">
-    <div class="card-title">📈 Einnahmen vs. Ausgaben (12 Monate)</div>
+    <div class="card-title">Einnahmen vs. Ausgaben · 12 Monate</div>
     <div class="chart-wrap"><canvas id="chartBar"></canvas></div>
   </div>
 
+  <!-- Budget-Ampel -->
+  <div class="card" id="budgetAmpelCard" style="display:none">
+    <div class="card-title">Budget-Ampel</div>
+    <div class="budget-grid" id="budgetAmpelGrid"></div>
+  </div>
+
+  <!-- Donut Chart -->
   <div class="card">
-    <div class="card-title">🥧 Ausgaben nach Kategorie (aktueller Monat)</div>
+    <div class="card-title">Ausgaben nach Kategorie</div>
     <div class="chart-wrap"><canvas id="chartDonut"></canvas></div>
   </div>
 
+  <!-- Liquiditätsverlauf -->
   <div class="card">
-    <div class="card-title">💧 Liquiditätsverlauf (Kumuliert)</div>
+    <div class="card-title">Liquiditätsverlauf (kumuliert)</div>
     <div class="chart-wrap"><canvas id="chartLine"></canvas></div>
+  </div>
+
+  <!-- Nächste Fälligkeiten -->
+  <div class="card" id="faelligkeitenCard" style="display:none">
+    <div class="card-title">Nächste Fälligkeiten</div>
+    <div id="faelligkeitenList"></div>
   </div>
 </div>
 
@@ -863,72 +895,132 @@ function fillSelect(id, opts) {
   if (cur) el.value = cur;
 }
 
+// ─── DASHBOARD HELPERS ───────────────────────────────────────────────
+function calcKontostand() {
+  if (!S.kontostandDatum) return S.kontostand;
+  const [ky, km] = S.kontostandDatum.split('-').map(Number);
+  const baseMonth = ky * 12 + (km - 1);
+  const curMonth  = S.currentYear * 12 + S.currentMonthIdx;
+  let total = S.kontostand;
+  for (let m = baseMonth; m <= curMonth; m++) {
+    const mi = m % 12, yi = Math.floor(m / 12);
+    total += calcMonth(mi, yi).saldo;
+  }
+  return total;
+}
+
+function calcBudgetIst(katId, monat, jahr) {
+  const moStr = `${jahr}-${String(monat+1).padStart(2,'0')}`;
+  const buchIst = S.buchungen
+    .filter(b => b.kat === katId && b.datum.startsWith(moStr))
+    .reduce((s, b) => s + (b.typ === 'ausgabe' ? b.betrag : -b.betrag), 0);
+  const bookedPlanRefs = new Set(
+    S.buchungen
+      .filter(b => b.planRef && b.datum.startsWith(moStr))
+      .map(b => b.planRef)
+  );
+  const planIst = S.ausgaben
+    .filter(a => a.kat === katId && !bookedPlanRefs.has(a.id))
+    .reduce((s, a) => s + betragImMonat(a, monat, jahr), 0);
+  return buchIst + planIst;
+}
+
+function calcNotfallZiel() {
+  if (S.notfallreserveZiel !== null) return S.notfallreserveZiel;
+  return S.ausgaben
+    .filter(a => a.typ === 'fix')
+    .reduce((s, a) => s + betragImMonat(a, S.currentMonthIdx, S.currentYear), 0) * 3;
+}
+
+function getKatEmoji(id) {
+  const k = S.kategorien.find(k => k.id === id);
+  return k?.emoji || '📦';
+}
+
 // ─── DASHBOARD ───────────────────────────────────────────────────────
 function renderDashboard() {
   const cur = calcMonth(S.currentMonthIdx, S.currentYear);
-  document.getElementById('kpiEin').textContent   = fmt(cur.ein);
-  document.getElementById('kpiAus').textContent   = fmt(cur.aus);
-  const salEl = document.getElementById('kpiSaldo');
-  salEl.textContent = fmt(cur.saldo);
-  salEl.className = 'kpi-value ' + (cur.saldo >= 0 ? 'pos' : 'neg');
+  document.getElementById('kpiEin').textContent = fmt(cur.ein);
+  document.getElementById('kpiAus').textContent = fmt(cur.aus);
+  const konto = calcKontostand();
+  const kontoEl = document.getElementById('kpiKonto');
+  kontoEl.textContent = fmt(konto);
+  kontoEl.className = 'kpi-value ' + (konto >= 0 ? 'pos' : 'neg');
 
   // Warning Banner
   const wb = document.getElementById('warnBanner');
   if (cur.saldo < 0) {
-    wb.innerHTML = `<div class="warning-banner"><span class="warning-icon">⚠️</span><div><div class="warning-text">Negatives Monatssaldo: ${fmt(cur.saldo)}</div><div class="warning-sub">Deine Ausgaben übersteigen im aktuellen Monat die Einnahmen. Bitte Ausgaben prüfen.</div></div></div>`;
+    wb.innerHTML = `<div class="warning-banner"><span class="warning-icon">⚠️</span><div><div class="warning-text">Negatives Monatssaldo: ${fmt(cur.saldo)}</div><div class="warning-sub">Ausgaben übersteigen Einnahmen diesen Monat.</div></div></div>`;
   } else if (cur.saldo < cur.ein * 0.1) {
-    wb.innerHTML = `<div class="warning-banner"><span class="warning-icon">🟡</span><div><div class="warning-text">Geringes Monatssaldo: ${fmt(cur.saldo)}</div><div class="warning-sub">Weniger als 10% der Einnahmen bleiben übrig. Puffer für Unvorhergesehenes gering.</div></div></div>`;
+    wb.innerHTML = `<div class="warning-banner warn"><span class="warning-icon">🟡</span><div><div class="warning-text">Geringes Monatssaldo: ${fmt(cur.saldo)}</div><div class="warning-sub">Weniger als 10 % der Einnahmen bleiben übrig.</div></div></div>`;
   } else {
-    wb.innerHTML = `<div class="warning-banner ok"><span class="warning-icon">✅</span><div><div class="warning-text">Saldo positiv: ${fmt(cur.saldo)}</div><div class="warning-sub">Super! Deine Finanzen sind diesen Monat im grünen Bereich.</div></div></div>`;
+    wb.innerHTML = `<div class="warning-banner ok"><span class="warning-icon">✅</span><div><div class="warning-text">Saldo positiv: ${fmt(cur.saldo)}</div><div class="warning-sub">Finanzen im grünen Bereich.</div></div></div>`;
   }
 
-  const months12 = get12Months();
-  const labels   = months12.map(m=>m.label);
+  // Notfallreserve Widget
+  const nfZiel = calcNotfallZiel();
+  const nfIst  = S.kontostand;
+  const nfPct  = nfZiel > 0 ? Math.min(100, (nfIst / nfZiel) * 100) : 0;
+  const fixAus = S.ausgaben.filter(a => a.typ === 'fix')
+    .reduce((s, a) => s + betragImMonat(a, S.currentMonthIdx, S.currentYear), 0);
+  const nfMonate = fixAus > 0 ? (nfIst / fixAus).toFixed(1) : '–';
+  document.getElementById('wNotfallValue').textContent = `${nfMonate} Monate`;
+  const nfBar = document.getElementById('wNotfallBar');
+  nfBar.style.width = nfPct + '%';
+  nfBar.className = 'progress-bar' + (nfPct < 67 ? ' warn' : '');
+  document.getElementById('wNotfallSub').textContent = `Ziel: ${fmt(nfZiel)} · Ist: ${fmt(nfIst)}`;
 
-  // BAR CHART
+  // Sparziele Widget
+  document.getElementById('wSparValue').textContent = S.sparziele.length + ' aktiv';
+  document.getElementById('wSparList').innerHTML = S.sparziele.slice(0,3).map(s =>
+    `<div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:0.65rem;color:var(--muted)">${sanitize(s.emoji)} ${sanitize(s.name)}</span>
+      <span style="font-size:0.65rem;font-weight:700;color:var(--text)">${Math.round((s.aktuell/s.ziel)*100)}%</span>
+    </div>`
+  ).join('');
+
+  // Charts
+  const months12 = get12Months();
+  const labels   = months12.map(m => m.label);
+
   destroyChart('chartBar');
   charts['chartBar'] = new Chart(document.getElementById('chartBar').getContext('2d'), {
     type: 'bar',
     data: {
       labels,
       datasets: [
-        { label: 'Einnahmen', data: months12.map(m=>m.ein), backgroundColor: '#16a34a', borderRadius: 6 },
-        { label: 'Ausgaben', data: months12.map(m=>m.aus), backgroundColor: '#dc2626', borderRadius: 6 },
+        { label:'Einnahmen', data:months12.map(m=>m.ein), backgroundColor:'#1E656D', borderRadius:5 },
+        { label:'Ausgaben',  data:months12.map(m=>m.aus), backgroundColor:'#F62A00', borderRadius:5 },
       ]
     },
-    options: chartOpts({ yPrefix: '€', stacked: false })
+    options: chartOpts({ yPrefix:'€' })
   });
 
-  // DONUT
   const catData = {};
   S.ausgaben.forEach(a => {
     const b = betragImMonat(a, S.currentMonthIdx, S.currentYear);
-    if (b > 0) {
-      const k = getKatName(a.kat);
-      catData[k] = (catData[k] || 0) + b;
-    }
+    if (b > 0) { const k = getKatName(a.kat); catData[k] = (catData[k]||0) + b; }
   });
   const catLabels = Object.keys(catData);
   const catVals   = Object.values(catData);
-  const palette   = ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2','#db2777','#059669','#ea580c','#4f46e5'];
+  const palette   = ['#1E656D','#F62A00','#EE9B00','#94D2BD','#00293C','#eaedc2','#db2777','#059669','#ea580c','#4f46e5'];
 
   destroyChart('chartDonut');
   charts['chartDonut'] = new Chart(document.getElementById('chartDonut').getContext('2d'), {
     type: 'doughnut',
     data: {
       labels: catLabels,
-      datasets: [{ data: catVals, backgroundColor: palette.slice(0, catLabels.length), borderWidth: 2, borderColor: '#fff' }]
+      datasets: [{ data:catVals, backgroundColor:palette.slice(0,catLabels.length), borderWidth:2, borderColor:getComputedStyle(document.documentElement).getPropertyValue('--card')||'#fff' }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive:true, maintainAspectRatio:false,
       plugins: {
-        legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10, color: getComputedStyle(document.documentElement).getPropertyValue('--text') || '#1e293b' } },
-        tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.raw) } }
+        legend: { position:'bottom', labels:{ font:{size:11}, padding:10 } },
+        tooltip: { callbacks:{ label: ctx => ' ' + fmt(ctx.raw) } }
       }
     }
   });
 
-  // LINE (kumuliert)
   let kum = 0;
   const kumData = months12.map(m => { kum += m.saldo; return +kum.toFixed(2); });
   destroyChart('chartLine');
@@ -937,14 +1029,80 @@ function renderDashboard() {
     data: {
       labels,
       datasets: [{
-        label: 'Kumuliertes Saldo',
-        data: kumData,
-        borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.12)',
-        fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: '#2563eb'
+        label:'Kumuliertes Saldo',
+        data:kumData,
+        borderColor:'#1E656D', backgroundColor:'rgba(30,101,109,0.12)',
+        fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#1E656D'
       }]
     },
-    options: chartOpts({ yPrefix: '€' })
+    options: chartOpts({ yPrefix:'€' })
   });
+
+  // Budget-Ampel
+  const budgetKats = S.kategorien.filter(k => k.budget !== null && k.typ === 'ausgabe');
+  const ampelCard = document.getElementById('budgetAmpelCard');
+  if (budgetKats.length > 0) {
+    ampelCard.style.display = '';
+    document.getElementById('budgetAmpelGrid').innerHTML = budgetKats.map(k => {
+      const ist = calcBudgetIst(k.id, S.currentMonthIdx, S.currentYear);
+      const pct = Math.round((ist / k.budget) * 100);
+      const color = pct >= 100 ? 'var(--red)' : pct >= 80 ? 'var(--amber)' : 'var(--teal)';
+      const isOver = pct >= 100;
+      return `<div class="budget-card${isOver?' over':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <span class="budget-name">${sanitize(k.emoji||'')} ${sanitize(k.name)}</span>
+          <span class="budget-pct" style="color:${color}">${pct}%${pct>=100?' ⚠️':''}</span>
+        </div>
+        <div class="budget-bar-bg"><div class="budget-bar" style="width:${Math.min(100,pct)}%;background:${color}"></div></div>
+        <div class="budget-sub">${isOver ? '+'+fmt(ist-k.budget)+' über Limit' : fmt(ist)+' / '+fmt(k.budget)}</div>
+      </div>`;
+    }).join('');
+  } else {
+    ampelCard.style.display = 'none';
+  }
+
+  // Nächste Fälligkeiten
+  const allePosten = [
+    ...S.einnahmen.map(e => ({...e, _typ:'einnahme'})),
+    ...S.ausgaben.map(a  => ({...a, _typ:'ausgabe'}))
+  ].filter(p => p.faelligTag && betragImMonat(p, S.currentMonthIdx, S.currentYear) > 0);
+
+  const bookedThisMonth = new Set(
+    S.buchungen
+      .filter(b => {
+        const [y,m] = b.datum.split('-').map(Number);
+        return y === S.currentYear && (m-1) === S.currentMonthIdx && b.planRef;
+      })
+      .map(b => b.planRef)
+  );
+
+  const offene = allePosten
+    .filter(p => !bookedThisMonth.has(p.id))
+    .sort((a,b) => a.faelligTag - b.faelligTag);
+
+  const faelligCard = document.getElementById('faelligkeitenCard');
+  if (offene.length > 0) {
+    faelligCard.style.display = '';
+    document.getElementById('faelligkeitenList').innerHTML = offene.map(p => {
+      const amtColor = p._typ === 'einnahme' ? 'var(--teal)' : (p.typ === 'sparen' ? '#5a5e10' : 'var(--red)');
+      const amtSign  = p._typ === 'einnahme' ? '+' : '−';
+      const bgColor  = p._typ === 'einnahme' ? 'var(--teal-bg)' : (p.typ === 'sparen' ? 'var(--cream-dark)' : '#fff0ec');
+      const txColor  = p._typ === 'einnahme' ? 'var(--teal)' : (p.typ === 'sparen' ? '#5a5e10' : 'var(--red)');
+      return `<div class="faellig-item">
+        <div class="faellig-date" style="background:${bgColor}">
+          <div class="faellig-month" style="color:${txColor}">${MONTHS[S.currentMonthIdx]}</div>
+          <div class="faellig-day" style="color:var(--primary)">${p.faelligTag}</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="buch-name">${sanitize(p.name)}</div>
+          <div class="buch-meta">${getKatName(p.kat)} · ${wdhLabel(p.wdh)}</div>
+        </div>
+        <div class="buch-amount" style="color:${amtColor}">${amtSign}${fmt(betragImMonat(p,S.currentMonthIdx,S.currentYear))}</div>
+      </div>`;
+    }).join('');
+  } else {
+    faelligCard.style.display = 'none';
+  }
 }
 
 function destroyChart(id) {
@@ -953,19 +1111,15 @@ function destroyChart(id) {
 
 function chartOpts({ yPrefix = '', stacked = false } = {}) {
   return {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    plugins: {
-      legend: { labels: { font: { size: 11 }, padding: 8 } },
-      tooltip: { callbacks: { label: ctx => ' ' + (yPrefix ? yPrefix + ' ' : '') + ctx.raw.toLocaleString('de-DE', {minimumFractionDigits:2,maximumFractionDigits:2}) } }
+    responsive:true, maintainAspectRatio:false,
+    interaction:{ mode:'index', intersect:false },
+    plugins:{
+      legend:{ labels:{ font:{size:11}, padding:8 } },
+      tooltip:{ callbacks:{ label: ctx => ' ' + (yPrefix?yPrefix+' ':'') + ctx.raw.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2}) } }
     },
-    scales: {
-      x: { grid: { display: false }, ticks: { font: { size: 10 } }, stacked },
-      y: {
-        beginAtZero: true, stacked,
-        ticks: { font: { size: 10 }, callback: v => fmtShort(v) },
-        grid: { color: 'rgba(0,0,0,0.06)' }
-      }
+    scales:{
+      x:{ grid:{display:false}, ticks:{font:{size:10}}, stacked },
+      y:{ beginAtZero:true, stacked, ticks:{font:{size:10}, callback: v=>fmtShort(v)}, grid:{color:'rgba(0,41,60,0.05)'} }
     }
   };
 }
