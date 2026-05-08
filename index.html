@@ -1371,16 +1371,20 @@ function renderBuchungen() {
   if (buchFilter === 'einnahme') buchungen = buchungen.filter(b => b.typ==='einnahme');
   if (buchFilter === 'ausgabe')  buchungen = buchungen.filter(b => b.typ==='ausgabe');
 
+  const filteredPlanItems = buchFilter === 'alle'
+    ? planItems
+    : planItems.filter(p => p._planTyp === buchFilter);
+
   const allEntries = [
     ...buchungen.map(b => ({ ...b, _kind:'ist' })),
-    ...planItems.filter(p => !bookedRefs.has(p.id)).map(p => ({
+    ...filteredPlanItems.filter(p => !bookedRefs.has(p.id)).map(p => ({
       id: p.id, name: p.name,
       betrag: betragImMonat(p, S.currentMonthIdx, S.currentYear),
       typ: p._planTyp, kat: p.kat,
       datum: `${S.currentYear}-${String(S.currentMonthIdx+1).padStart(2,'0')}-${String(p.faelligTag).padStart(2,'0')}`,
       planRef: p.id, _kind:'plan', _planTyp: p._planTyp,
     })),
-    ...planItems.filter(p => bookedRefs.has(p.id)).map(p => ({
+    ...filteredPlanItems.filter(p => bookedRefs.has(p.id)).map(p => ({
       id: p.id + '_booked', name: p.name,
       betrag: betragImMonat(p, S.currentMonthIdx, S.currentYear),
       typ: p._planTyp, kat: p.kat,
