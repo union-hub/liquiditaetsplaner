@@ -612,6 +612,25 @@
 
 <!-- PAGE: SPARZIELE -->
 <div class="page" id="page-sparziele">
+
+  <!-- Notfallreserve -->
+  <div class="card" style="background:var(--teal-bg)">
+    <div class="card-title" style="color:var(--teal)">🛡️ Notfallreserve</div>
+    <div id="nfStatus" style="font-size:0.82rem;color:var(--text);margin-bottom:10px">Wird berechnet…</div>
+    <div class="progress-wrap"><div class="progress-bar" id="nfBar" style="width:0%"></div></div>
+    <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--muted);margin-top:4px">
+      <span id="nfPct">0%</span>
+      <span id="nfZielLabel"></span>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+      <div style="flex:1;min-width:120px">
+        <label>Eigenes Ziel (€) <span style="font-weight:400;color:var(--muted)">(leer = auto)</span></label>
+        <input type="number" id="nfZielInput" placeholder="z.B. 5000" min="0" step="100">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveNotfallZiel()">Speichern</button>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-title">🎯 Neues Sparziel</div>
     <div class="form-full">
@@ -1231,6 +1250,12 @@ function wdhLabel(w) {
 }
 
 // ─── SPARZIELE ───────────────────────────────────────────────────────
+function saveNotfallZiel() {
+  const val = parseFloat(document.getElementById('nfZielInput').value);
+  S.notfallreserveZiel = isNaN(val) || val <= 0 ? null : val;
+  save(); renderAll(); showToast('✅ Notfallreserve-Ziel gespeichert');
+}
+
 function addSparziel() {
   const name    = document.getElementById('sparName').value.trim();
   const ziel    = parseFloat(document.getElementById('sparZiel').value)||0;
@@ -1260,6 +1285,25 @@ function updateSparziel(id, delta) {
 }
 
 function renderSparziele() {
+  // Notfallreserve
+  const nfZiel   = calcNotfallZiel();
+  const nfIst    = S.kontostand;
+  const nfPctVal = nfZiel > 0 ? Math.min(100, (nfIst / nfZiel) * 100) : 0;
+  const fixAus   = S.ausgaben.filter(a => a.typ === 'fix')
+    .reduce((s, a) => s + betragImMonat(a, S.currentMonthIdx, S.currentYear), 0);
+  const nfMonate = fixAus > 0 ? (nfIst / fixAus).toFixed(1) : '–';
+  const nfBarEl  = document.getElementById('nfBar');
+  if (nfBarEl) {
+    nfBarEl.style.width = nfPctVal + '%';
+    nfBarEl.className = 'progress-bar' + (nfPctVal < 67 ? ' warn' : '');
+    document.getElementById('nfStatus').textContent =
+      `Kontostand ${fmt(nfIst)} entspricht ${nfMonate} Monaten Fixkosten.`;
+    document.getElementById('nfPct').textContent = Math.round(nfPctVal) + '%';
+    document.getElementById('nfZielLabel').textContent = 'Ziel: ' + fmt(nfZiel);
+    const inp = document.getElementById('nfZielInput');
+    if (inp && !inp.value && S.notfallreserveZiel) inp.value = S.notfallreserveZiel;
+  }
+
   const cont = document.getElementById('sparZieleList');
   if (!S.sparziele.length) {
     cont.innerHTML = '<div class="card"><p style="color:var(--muted);font-size:0.82rem;text-align:center;padding:8px">Noch keine Sparziele angelegt.</p></div>';
