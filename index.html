@@ -611,61 +611,85 @@ function defaultState() {
   return {
     currentMonthIdx: now.getMonth(),
     currentYear: now.getFullYear(),
+    kontostand: 0,
+    kontostandDatum: new Date().toISOString().slice(0,10),
+    notfallreserveZiel: null,
     kategorien: [
-      {id:'k1', name:'Gehalt/Lohn',   typ:'einnahme', emoji:'💼'},
-      {id:'k2', name:'Nebenverdienst',typ:'einnahme', emoji:'💡'},
-      {id:'k3', name:'Sonstiges',     typ:'einnahme', emoji:'➕'},
-      {id:'k4', name:'Wohnen',        typ:'ausgabe',  emoji:'🏠'},
-      {id:'k5', name:'Mobilität',     typ:'ausgabe',  emoji:'🚗'},
-      {id:'k6', name:'Lebensmittel',  typ:'ausgabe',  emoji:'🛒'},
-      {id:'k7', name:'Versicherungen',typ:'ausgabe',  emoji:'🛡️'},
-      {id:'k8', name:'Kommunikation', typ:'ausgabe',  emoji:'📱'},
-      {id:'k9', name:'Freizeit',      typ:'ausgabe',  emoji:'🎉'},
-      {id:'k10',name:'Gesundheit',    typ:'ausgabe',  emoji:'🏥'},
-      {id:'k11',name:'Kleidung',      typ:'ausgabe',  emoji:'👗'},
-      {id:'k12',name:'Abonnements',   typ:'ausgabe',  emoji:'📺'},
-      {id:'k13',name:'Sparen',        typ:'ausgabe',  emoji:'🏦'},
-      {id:'k14',name:'Sonstiges',     typ:'ausgabe',  emoji:'📦'},
+      {id:'k1',  name:'Gehalt/Lohn',    typ:'einnahme', emoji:'💼', budget:null, budgetTyp:'monatlich'},
+      {id:'k2',  name:'Nebenverdienst', typ:'einnahme', emoji:'💡', budget:null, budgetTyp:'monatlich'},
+      {id:'k3',  name:'Sonstiges',      typ:'einnahme', emoji:'➕', budget:null, budgetTyp:'monatlich'},
+      {id:'k4',  name:'Wohnen',         typ:'ausgabe',  emoji:'🏠', budget:null, budgetTyp:'monatlich'},
+      {id:'k5',  name:'Mobilität',      typ:'ausgabe',  emoji:'🚗', budget:null, budgetTyp:'monatlich'},
+      {id:'k6',  name:'Lebensmittel',   typ:'ausgabe',  emoji:'🛒', budget:null, budgetTyp:'monatlich'},
+      {id:'k7',  name:'Versicherungen', typ:'ausgabe',  emoji:'🛡️', budget:null, budgetTyp:'monatlich'},
+      {id:'k8',  name:'Kommunikation',  typ:'ausgabe',  emoji:'📱', budget:null, budgetTyp:'monatlich'},
+      {id:'k9',  name:'Freizeit',       typ:'ausgabe',  emoji:'🎉', budget:null, budgetTyp:'monatlich'},
+      {id:'k10', name:'Gesundheit',     typ:'ausgabe',  emoji:'🏥', budget:null, budgetTyp:'monatlich'},
+      {id:'k11', name:'Kleidung',       typ:'ausgabe',  emoji:'👗', budget:null, budgetTyp:'monatlich'},
+      {id:'k12', name:'Abonnements',    typ:'ausgabe',  emoji:'📺', budget:null, budgetTyp:'monatlich'},
+      {id:'k13', name:'Sparen',         typ:'ausgabe',  emoji:'🏦', budget:null, budgetTyp:'monatlich'},
+      {id:'k14', name:'Sonstiges',      typ:'ausgabe',  emoji:'📦', budget:null, budgetTyp:'monatlich'},
     ],
     einnahmen: [
-      {id:'e1', name:'Gehalt netto',    betrag:2800, kat:'k1', wdh:'monatlich',    abMonat:0, abJahr: new Date().getFullYear()},
-      {id:'e2', name:'Kindergeld',      betrag:250,  kat:'k3', wdh:'monatlich',    abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'e1', name:'Gehalt netto',  betrag:2800, kat:'k1', wdh:'monatlich', abMonat:0, abJahr:now.getFullYear(), faelligTag:15},
+      {id:'e2', name:'Kindergeld',    betrag:250,  kat:'k3', wdh:'monatlich', abMonat:0, abJahr:now.getFullYear(), faelligTag:1},
     ],
     ausgaben: [
-      {id:'a1', name:'Miete + NK',      betrag:950,  kat:'k4', wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
-      {id:'a2', name:'KFZ-Versicherung',betrag:85,   kat:'k7', wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
-      {id:'a3', name:'Strom & Gas',     betrag:110,  kat:'k4', wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
-      {id:'a4', name:'Handy & Internet',betrag:55,   kat:'k8', wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
-      {id:'a5', name:'Lebensmittel',    betrag:350,  kat:'k6', wdh:'monatlich',    typ:'variabel', abMonat:0, abJahr: new Date().getFullYear()},
-      {id:'a6', name:'Freizeit',        betrag:150,  kat:'k9', wdh:'monatlich',    typ:'variabel', abMonat:0, abJahr: new Date().getFullYear()},
-      {id:'a7', name:'Streaming-Abos',  betrag:35,   kat:'k12',wdh:'monatlich',    typ:'fix',      abMonat:0, abJahr: new Date().getFullYear()},
-      {id:'a8', name:'Sparrate Notfonds',betrag:200, kat:'k13',wdh:'monatlich',    typ:'sparen',   abMonat:0, abJahr: new Date().getFullYear()},
+      {id:'a1', name:'Miete + NK',       betrag:950,  kat:'k4', wdh:'monatlich', typ:'fix',      abMonat:0, abJahr:now.getFullYear(), faelligTag:1},
+      {id:'a2', name:'KFZ-Versicherung', betrag:85,   kat:'k7', wdh:'monatlich', typ:'fix',      abMonat:0, abJahr:now.getFullYear(), faelligTag:1},
+      {id:'a3', name:'Strom & Gas',      betrag:110,  kat:'k4', wdh:'monatlich', typ:'fix',      abMonat:0, abJahr:now.getFullYear(), faelligTag:10},
+      {id:'a4', name:'Handy & Internet', betrag:55,   kat:'k8', wdh:'monatlich', typ:'fix',      abMonat:0, abJahr:now.getFullYear(), faelligTag:1},
+      {id:'a5', name:'Lebensmittel',     betrag:350,  kat:'k6', wdh:'monatlich', typ:'variabel', abMonat:0, abJahr:now.getFullYear(), faelligTag:null},
+      {id:'a6', name:'Freizeit',         betrag:150,  kat:'k9', wdh:'monatlich', typ:'variabel', abMonat:0, abJahr:now.getFullYear(), faelligTag:null},
+      {id:'a7', name:'Streaming-Abos',   betrag:35,   kat:'k12',wdh:'monatlich', typ:'fix',      abMonat:0, abJahr:now.getFullYear(), faelligTag:5},
+      {id:'a8', name:'Sparrate Notfonds',betrag:200,  kat:'k13',wdh:'monatlich', typ:'sparen',   abMonat:0, abJahr:now.getFullYear(), faelligTag:28},
     ],
     sparziele: [
-      {id:'s1', name:'Urlaub',     emoji:'✈️', ziel:2000, aktuell:400,  rate:150},
-      {id:'s2', name:'Neues Fahrrad',emoji:'🚴',ziel:800, aktuell:200, rate:80},
-    ]
+      {id:'s1', name:'Urlaub',       emoji:'✈️', ziel:2000, aktuell:400,  rate:150},
+      {id:'s2', name:'Neues Fahrrad',emoji:'🚴', ziel:800,  aktuell:200,  rate:80},
+    ],
+    buchungen: [],
   };
+}
+
+function migrate(data) {
+  if (!data.buchungen)                       data.buchungen = [];
+  if (data.kontostand === undefined)         data.kontostand = 0;
+  if (!data.kontostandDatum)                 data.kontostandDatum = new Date().toISOString().slice(0,10);
+  if (data.notfallreserveZiel === undefined)  data.notfallreserveZiel = null;
+  data.kategorien.forEach(k => {
+    if (k.budget    === undefined) k.budget    = null;
+    if (!k.budgetTyp)              k.budgetTyp = 'monatlich';
+  });
+  [...(data.einnahmen||[]), ...(data.ausgaben||[])].forEach(e => {
+    if (e.faelligTag === undefined) e.faelligTag = null;
+  });
+  return data;
 }
 
 function load() {
   const embedded = document.getElementById('embedded-data');
   if (embedded && embedded.textContent.trim()) {
-    try { return JSON.parse(embedded.textContent); } catch(e) {}
-    // malformed embedded-data: fall through to localStorage
+    try { return migrate(JSON.parse(embedded.textContent)); } catch(e) {}
   }
   try {
-    const raw = localStorage.getItem('liqplaner_v2');
-    return raw ? JSON.parse(raw) : defaultState();
+    const raw = localStorage.getItem('liqplaner_v3');
+    if (raw) return migrate(JSON.parse(raw));
+    const rawV2 = localStorage.getItem('liqplaner_v2');
+    if (rawV2) return migrate(JSON.parse(rawV2));
+    return defaultState();
   } catch(e) { return defaultState(); }
 }
-function save() { localStorage.setItem('liqplaner_v2', JSON.stringify(S)); }
+function save() { localStorage.setItem('liqplaner_v3', JSON.stringify(S)); }
 
 let S = load();
 let charts = {};
 
 // ─── HELPERS ─────────────────────────────────────────────────────────
-function uid() { return 'id_' + Math.random().toString(36).substr(2,9); }
+function uid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'id_' + Math.random().toString(36).substr(2,9);
+}
 function fmt(v) { return (v||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
 function fmtShort(v) { return (v||0).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}) + ' €'; }
 function sanitize(str) {
