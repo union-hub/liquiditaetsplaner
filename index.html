@@ -478,7 +478,7 @@
   <div class="card">
     <div class="section-header">
       <div class="card-title" style="margin:0">📋 Meine Einnahmen</div>
-      <button class="btn btn-sm" style="background:var(--bg);color:var(--blue);border:1.5px solid var(--blue)" onclick="openCatModal('einnahme')">+ Kategorie</button>
+      <button class="btn btn-sm" style="background:var(--cream);color:var(--teal);border:1.5px solid var(--teal)" onclick="openCatModal('einnahme')">+ Kategorie</button>
     </div>
     <div class="item-list" id="einnahmenList"></div>
   </div>
@@ -539,7 +539,7 @@
   <div class="card">
     <div class="section-header">
       <div class="card-title" style="margin:0">📋 Meine Ausgaben</div>
-      <button class="btn btn-sm" style="background:var(--bg);color:var(--red);border:1.5px solid var(--red)" onclick="openCatModal('ausgabe')">+ Kategorie</button>
+      <button class="btn btn-sm" style="background:var(--cream);color:var(--red);border:1.5px solid var(--red)" onclick="openCatModal('ausgabe')">+ Kategorie</button>
     </div>
     <div class="item-list" id="ausgabenList"></div>
   </div>
@@ -1060,7 +1060,7 @@ function renderSparziele() {
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn-sm btn-success" onclick="updateSparziel('${s.id}', ${s.rate||50})">+ ${fmt(s.rate||50)} einzahlen</button>
-        <button class="btn btn-sm" style="background:var(--bg);color:var(--muted);border:1px solid var(--border)" onclick="updateSparziel('${s.id}', -${s.rate||50})">− Entnehmen</button>
+        <button class="btn btn-sm" style="background:var(--cream);color:var(--muted);border:1px solid var(--border)" onclick="updateSparziel('${s.id}', -${s.rate||50})">− Entnehmen</button>
       </div>
     </div>`;
   }).join('');
@@ -1075,8 +1075,8 @@ function renderVorschau() {
   const stripe = document.getElementById('monthStripe');
   stripe.innerHTML = months.map((m,i) => {
     const cls = i === 0 ? 'month-dot active' : 'month-dot';
-    const color = m.saldo >= 0 ? 'var(--green)' : 'var(--red)';
-    return `<div class="${cls}" style="background:var(--card);border-color:${i===0?'var(--blue)':'var(--border)'}">
+    const color = m.saldo >= 0 ? 'var(--teal)' : 'var(--red)';
+    return `<div class="${cls}" style="background:var(--card);border-color:${i===0?'var(--teal)':'var(--border)'}">
       <div style="font-size:0.62rem;color:var(--muted)">${m.label.split(' ')[0]}</div>
       <div style="font-size:0.62rem;color:var(--muted)">${m.label.split(' ')[1]}</div>
       <div class="md-saldo" style="color:${color}">${m.saldo>=0?'+':''} ${fmtShort(m.saldo).replace(' €','')}</div>
@@ -1312,7 +1312,7 @@ renderAll();
     </p>
     <div style="margin-bottom:10px">
       <label>JSON-Backup-Datei auswählen</label>
-      <input type="file" id="importFile" accept=".json" style="padding:8px;border:1.5px dashed var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:0.85rem">
+      <input type="file" id="importFile" accept=".json" style="padding:8px;border:1.5px dashed var(--border);border-radius:10px;background:var(--cream);color:var(--text);font-size:0.85rem">
     </div>
     <button class="btn btn-amber btn-full" onclick="importJSON()">📂 Backup laden &amp; wiederherstellen</button>
   </div>
