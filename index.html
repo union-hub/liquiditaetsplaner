@@ -561,6 +561,10 @@ function defaultState() {
 
 function load() {
   try {
+    const embedded = document.getElementById('embedded-data');
+    if (embedded && embedded.textContent.trim()) {
+      return JSON.parse(embedded.textContent);
+    }
     const raw = localStorage.getItem('liqplaner_v2');
     return raw ? JSON.parse(raw) : defaultState();
   } catch(e) { return defaultState(); }
@@ -574,6 +578,14 @@ let charts = {};
 function uid() { return 'id_' + Math.random().toString(36).substr(2,9); }
 function fmt(v) { return (v||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
 function fmtShort(v) { return (v||0).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}) + ' €'; }
+function sanitize(str) {
+  return String(str||'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -663,9 +675,9 @@ function populateSelects() {
   fillSelect('einKat', einKats.map(k=>({v:k.id, l:(k.emoji?k.emoji+' ':'')+k.name})));
   fillSelect('ausKat', ausKats.map(k=>({v:k.id, l:(k.emoji?k.emoji+' ':'')+k.name})));
 
-  // Monate (12 Monate ab jetzt)
+  // Monate (36 Monate ab jetzt)
   const moOpts = [];
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 36; i++) {
     let m = S.currentMonthIdx + i, y = S.currentYear + Math.floor(m/12);
     m = m % 12;
     moOpts.push({v: m+'_'+y, l: MONTHS_FULL[m]+' '+y});
@@ -841,7 +853,7 @@ function renderEinnahmen() {
     const b = betragImMonat(e, S.currentMonthIdx, S.currentYear);
     return `<div class="item income">
       <div class="item-left">
-        <div class="item-name">${e.name}</div>
+        <div class="item-name">${sanitize(e.name)}</div>
         <div class="item-meta">${getKatName(e.kat)} · ${wdhLabel(e.wdh)} · ab ${MONTHS[e.abMonat]} ${e.abJahr}${e.bisJahr ? ' · bis ' + MONTHS[e.bisMonat] + ' ' + e.bisJahr : ''}${ablaufBadge(e, S.currentMonthIdx, S.currentYear)}</div>
       </div>
       <div class="item-right">
@@ -888,7 +900,7 @@ function renderAusgaben() {
                 : '<span class="badge badge-var">Var</span>';
     return `<div class="item expense">
       <div class="item-left">
-        <div class="item-name">${a.name} ${badge}</div>
+        <div class="item-name">${sanitize(a.name)} ${badge}</div>
         <div class="item-meta">${getKatName(a.kat)} · ${wdhLabel(a.wdh)} · ab ${MONTHS[a.abMonat]} ${a.abJahr}${a.bisJahr ? ' · bis ' + MONTHS[a.bisMonat] + ' ' + a.bisJahr : ''}${ablaufBadge(a, S.currentMonthIdx, S.currentYear)}</div>
       </div>
       <div class="item-right">
@@ -946,7 +958,7 @@ function renderSparziele() {
     return `<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
-          <div style="font-size:1.1rem;font-weight:800">${s.emoji} ${s.name}</div>
+          <div style="font-size:1.1rem;font-weight:800">${sanitize(s.emoji)} ${sanitize(s.name)}</div>
           <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">${fmt(s.aktuell)} von ${fmt(s.ziel)} · Noch ${fmt(rest)}</div>
         </div>
         <button class="btn btn-danger btn-sm" onclick="delSparziel('${s.id}')">🗑️</button>
@@ -958,7 +970,7 @@ function renderSparziele() {
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn-sm btn-success" onclick="updateSparziel('${s.id}', ${s.rate||50})">+ ${fmt(s.rate||50)} einzahlen</button>
-        <button class="btn btn-sm" style="background:var(--bg);color:var(--muted);border:1px solid var(--border)" onclick="updateSparziel('${s.id}', -(s.rate||50))">− Entnehmen</button>
+        <button class="btn btn-sm" style="background:var(--bg);color:var(--muted);border:1px solid var(--border)" onclick="updateSparziel('${s.id}', -${s.rate||50})">− Entnehmen</button>
       </div>
     </div>`;
   }).join('');
@@ -1067,20 +1079,17 @@ function exportJSON() {
 }
 
 function exportHTML() {
-  // Lese die aktuelle HTML-Seite aus und bette Daten ein
-  const htmlSource = document.documentElement.outerHTML;
-  // Ersetze defaultState() durch eine Version die direkt unsere Daten zurückgibt
   const dataStr = JSON.stringify(S);
-  const patched = htmlSource.replace(
-    /function load\(\) \{[\s\S]*?catch\(e\) \{ return defaultState\(\); \}\s*\}/,
-    'function load() { return ' + dataStr + '; }'
+  const htmlSource = document.documentElement.outerHTML;
+  const cleaned = htmlSource.replace(/<script id="embedded-data"[^>]*>[\s\S]*?<\/script>/i, '');
+  const patched = cleaned.replace('</body>',
+    `<script id="embedded-data" type="application/json">${dataStr}</script>\n</body>`
   );
   const blob = new Blob([patched], { type: 'text/html;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  const date = new Date().toISOString().slice(0,10);
   a.href = url;
-  a.download = 'liquiditaetsplaner_' + date + '.html';
+  a.download = 'liquiditaetsplaner_' + new Date().toISOString().slice(0,10) + '.html';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1126,7 +1135,7 @@ function ablaufBadge(item, curMonat, curJahr) {
   const bis  = item.bisJahr * 12 + item.bisMonat;
   const cur  = curJahr * 12 + curMonat;
   const diff = bis - cur; // Monate bis Ablauf
-  if (diff < 0)  return ' <span style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:1px 6px;font-size:0.68rem;font-weight:700">✅ Abgelaufen</span>';
+  if (diff < 0)  return ' <span style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:1px 6px;font-size:0.68rem;font-weight:700">❌ Abgelaufen</span>';
   if (diff === 0) return ' <span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 6px;font-size:0.68rem;font-weight:700">⏰ Läuft ab</span>';
   if (diff <= 2)  return ` <span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 6px;font-size:0.68rem;font-weight:700">⚠️ Noch ${diff} Mon.</span>`;
   return '';
