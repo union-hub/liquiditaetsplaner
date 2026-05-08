@@ -607,7 +607,47 @@
 
 <!-- PAGE: BUCHUNGEN -->
 <div class="page" id="page-buchungen">
-  <!-- Wird in Task 8 befüllt -->
+
+  <!-- Schnelleingabe -->
+  <div class="card">
+    <div class="card-title">➕ Buchung erfassen</div>
+    <div class="seg-control">
+      <div class="seg-btn active-ein" id="buchTypEin" onclick="setBuchTyp('einnahme')">+ Einnahme</div>
+      <div class="seg-btn" id="buchTypAus" onclick="setBuchTyp('ausgabe')">− Ausgabe</div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Bezeichnung</label>
+        <input type="text" id="buchName" placeholder="z.B. Gehalt">
+      </div>
+      <div>
+        <label>Betrag (€)</label>
+        <input type="number" id="buchBetrag" placeholder="0,00" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Datum</label>
+        <input type="date" id="buchDatum">
+      </div>
+      <div>
+        <label>Kategorie</label>
+        <select id="buchKat"></select>
+      </div>
+    </div>
+    <button class="btn btn-success btn-full" onclick="addBuchung()">✅ Buchung speichern</button>
+  </div>
+
+  <!-- Filter Pills -->
+  <div class="pill-filters">
+    <div class="pill active" id="pillAlle" onclick="setBuchFilter('alle')">Alle</div>
+    <div class="pill" id="pillEin"  onclick="setBuchFilter('einnahme')">+ Einnahmen</div>
+    <div class="pill" id="pillAus"  onclick="setBuchFilter('ausgabe')">− Ausgaben</div>
+  </div>
+
+  <!-- Liste (wird per JS befüllt) -->
+  <div id="buchungenList"></div>
+
 </div>
 
 <!-- PAGE: SPARZIELE -->
@@ -768,6 +808,8 @@ function save() { localStorage.setItem('liqplaner_v3', JSON.stringify(S)); }
 
 let S = load();
 let charts = {};
+let buchFilter = 'alle';
+let buchTypAkt = 'einnahme';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────
 function uid() {
@@ -867,6 +909,30 @@ function updateHeader() {
   document.getElementById('headerSub').textContent = 'Stand: ' + new Date().toLocaleDateString('de-DE');
 }
 
+// ─── BUCHUNGEN STEUERUNG ─────────────────────────────────────────────
+function setBuchTyp(typ) {
+  buchTypAkt = typ;
+  document.getElementById('buchTypEin').className = 'seg-btn' + (typ==='einnahme'?' active-ein':'');
+  document.getElementById('buchTypAus').className = 'seg-btn' + (typ==='ausgabe'?' active-aus':'');
+  populateBuchKat();
+}
+
+function setBuchFilter(f) {
+  buchFilter = f;
+  ['Alle','Ein','Aus'].forEach(x => {
+    const el = document.getElementById('pill'+x);
+    if (el) el.classList.remove('active');
+  });
+  const map = {alle:'pillAlle', einnahme:'pillEin', ausgabe:'pillAus'};
+  document.getElementById(map[f])?.classList.add('active');
+  renderBuchungen();
+}
+
+function populateBuchKat() {
+  const kats = S.kategorien.filter(k => k.typ === buchTypAkt);
+  fillSelect('buchKat', kats.map(k => ({ v:k.id, l:(k.emoji?k.emoji+' ':'')+k.name })));
+}
+
 // ─── SELECTS POPULATE ────────────────────────────────────────────────
 function populateSelects() {
   // Kategorien
@@ -904,6 +970,11 @@ function populateSelects() {
     ausBis.innerHTML = '<option value="">Kein Ende</option>' + bisOpts.map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
     if (cv) ausBis.value = cv;
   }
+
+  // Buchungs-Datum default: heute
+  const buchDatum = document.getElementById('buchDatum');
+  if (buchDatum && !buchDatum.value) buchDatum.value = new Date().toISOString().slice(0,10);
+  populateBuchKat();
 }
 
 function fillSelect(id, opts) {
@@ -1239,10 +1310,153 @@ function renderAusgaben() {
   }).join('');
 }
 
+function addBuchung() {
+  const name   = document.getElementById('buchName').value.trim();
+  const betrag = parseFloat(document.getElementById('buchBetrag').value);
+  const datum  = document.getElementById('buchDatum').value;
+  const kat    = document.getElementById('buchKat').value;
+  if (!name || !betrag || !datum) { showToast('❌ Bitte alle Felder ausfüllen'); return; }
+  S.buchungen.push({ id:uid(), name, betrag, typ:buchTypAkt, kat, datum, planRef:null, notiz:'' });
+  document.getElementById('buchName').value   = '';
+  document.getElementById('buchBetrag').value = '';
+  save(); renderAll(); showToast('✅ Buchung gespeichert');
+}
+
+function delBuchung(id) {
+  S.buchungen = S.buchungen.filter(b => b.id !== id);
+  save(); renderAll(); showToast('🗑️ Gelöscht');
+}
+
+function markGebucht(planId, planTyp) {
+  const arr  = planTyp === 'einnahme' ? S.einnahmen : S.ausgaben;
+  const plan = arr.find(p => p.id === planId);
+  if (!plan) return;
+  const today = new Date().toISOString().slice(0,10);
+  S.buchungen.push({
+    id:      uid(),
+    name:    plan.name,
+    betrag:  betragImMonat(plan, S.currentMonthIdx, S.currentYear),
+    typ:     planTyp,
+    kat:     plan.kat,
+    datum:   today,
+    planRef: planId,
+    notiz:   ''
+  });
+  save(); renderAll(); showToast('✅ Als gebucht markiert');
+}
+
 function renderBuchungen() {
   const cont = document.getElementById('page-buchungen');
   if (!cont) return;
-  // Implementierung folgt in Task 8
+
+  const bookedRefs = new Set(
+    S.buchungen
+      .filter(b => {
+        const [y,m] = b.datum.split('-').map(Number);
+        return y === S.currentYear && (m-1) === S.currentMonthIdx && b.planRef;
+      })
+      .map(b => b.planRef)
+  );
+
+  const planItems = [
+    ...S.einnahmen.map(e => ({...e, _planTyp:'einnahme'})),
+    ...S.ausgaben.map(a  => ({...a, _planTyp:'ausgabe'}))
+  ].filter(p =>
+    p.faelligTag &&
+    betragImMonat(p, S.currentMonthIdx, S.currentYear) > 0
+  );
+
+  const moStr = `${S.currentYear}-${String(S.currentMonthIdx+1).padStart(2,'0')}`;
+  let buchungen = S.buchungen.filter(b => b.datum.startsWith(moStr));
+  if (buchFilter === 'einnahme') buchungen = buchungen.filter(b => b.typ==='einnahme');
+  if (buchFilter === 'ausgabe')  buchungen = buchungen.filter(b => b.typ==='ausgabe');
+
+  const allEntries = [
+    ...buchungen.map(b => ({ ...b, _kind:'ist' })),
+    ...planItems.filter(p => !bookedRefs.has(p.id)).map(p => ({
+      id: p.id, name: p.name,
+      betrag: betragImMonat(p, S.currentMonthIdx, S.currentYear),
+      typ: p._planTyp, kat: p.kat,
+      datum: `${S.currentYear}-${String(S.currentMonthIdx+1).padStart(2,'0')}-${String(p.faelligTag).padStart(2,'0')}`,
+      planRef: p.id, _kind:'plan', _planTyp: p._planTyp,
+    })),
+    ...planItems.filter(p => bookedRefs.has(p.id)).map(p => ({
+      id: p.id + '_booked', name: p.name,
+      betrag: betragImMonat(p, S.currentMonthIdx, S.currentYear),
+      typ: p._planTyp, kat: p.kat,
+      datum: `${S.currentYear}-${String(S.currentMonthIdx+1).padStart(2,'0')}-${String(p.faelligTag).padStart(2,'0')}`,
+      _kind: 'booked', _planTyp: p._planTyp,
+    })),
+  ].sort((a,b) => b.datum.localeCompare(a.datum));
+
+  // Nach Tag gruppieren
+  const byDay = {};
+  allEntries.forEach(e => {
+    const day = e.datum.slice(0,10);
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(e);
+  });
+
+  const listEl = document.getElementById('buchungenList');
+  if (!listEl) return;
+
+  if (Object.keys(byDay).length === 0) {
+    listEl.innerHTML = '<div class="card"><p style="color:var(--muted);font-size:0.82rem;text-align:center;padding:8px">Keine Buchungen in diesem Monat.</p></div>';
+  } else {
+    listEl.innerHTML = Object.entries(byDay)
+      .sort(([a],[b]) => b.localeCompare(a))
+      .map(([day, entries]) => {
+        const d = new Date(day + 'T00:00:00');
+        const today = new Date().toISOString().slice(0,10);
+        const dayLabel = day === today ? 'Heute · ' : '';
+        const dayStr   = `${dayLabel}${d.getDate()}. ${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`;
+        const rows = entries.map(e => {
+          const amtColor = e.typ==='einnahme' ? 'var(--teal)' : 'var(--red)';
+          const amtSign  = e.typ==='einnahme' ? '+' : '−';
+          let badge = '';
+          let actions = `<button class="btn btn-danger btn-sm" onclick="delBuchung('${e.id}')">🗑️</button>`;
+          if (e._kind === 'plan') {
+            badge = `<span style="background:var(--cream-dark);color:#5a5e10;border-radius:4px;padding:1px 6px;font-size:0.62rem;font-weight:600;margin-left:4px">GEPLANT</span>`;
+            actions = `<button class="btn btn-sm" style="background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-light)" onclick="markGebucht('${e.id}','${e._planTyp}')">✓ Buchen</button>`;
+          } else if (e._kind === 'booked') {
+            badge = `<span style="background:var(--teal-bg);color:var(--teal);border-radius:4px;padding:1px 6px;font-size:0.62rem;font-weight:600;margin-left:4px">✓ GEBUCHT</span>`;
+            actions = '';
+          }
+          return `<div class="buch-item">
+            <div class="buch-icon">${getKatEmoji(e.kat)}</div>
+            <div style="flex:1;min-width:0">
+              <div class="buch-name">${sanitize(e.name)}${badge}</div>
+              <div class="buch-meta">${getKatName(e.kat)}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="buch-amount" style="color:${amtColor}">${amtSign}${fmt(e.betrag)}</div>
+              ${actions}
+            </div>
+          </div>`;
+        }).join('');
+        return `<div class="card" style="padding:0;overflow:hidden">
+          <div class="day-header">${dayStr}</div>
+          ${rows}
+        </div>`;
+      }).join('');
+  }
+
+  // Monatszusammenfassung
+  const istBuchungen = S.buchungen.filter(b => b.datum.startsWith(moStr));
+  const istEin = istBuchungen.filter(b=>b.typ==='einnahme').reduce((s,b)=>s+b.betrag,0);
+  const istAus = istBuchungen.filter(b=>b.typ==='ausgabe').reduce((s,b)=>s+b.betrag,0);
+  const istSaldo = istEin - istAus;
+  listEl.insertAdjacentHTML('beforeend', `
+    <div class="summary-dark">
+      <div style="font-size:0.7rem;font-weight:700;color:var(--teal-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">
+        ${MONTHS_FULL[S.currentMonthIdx]} ${S.currentYear} · Ist-Zusammenfassung
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <div><div class="sd-label">Einnahmen</div><div class="sd-value" style="color:var(--teal)">${fmt(istEin)}</div></div>
+        <div><div class="sd-label">Ausgaben</div><div class="sd-value" style="color:var(--red)">${fmt(istAus)}</div></div>
+        <div><div class="sd-label">Saldo</div><div class="sd-value">${istSaldo>=0?'+':''}${fmt(istSaldo)}</div></div>
+      </div>
+    </div>`);
 }
 
 function wdhLabel(w) {
