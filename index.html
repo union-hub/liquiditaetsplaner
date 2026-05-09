@@ -944,9 +944,14 @@ function betragImMonat(item, monatIdx, jahr) {
 }
 
 function calcMonth(monatIdx, jahr) {
-  let ein = 0, aus = 0;
-  S.einnahmen.forEach(e => { ein += betragImMonat(e, monatIdx, jahr); });
-  S.ausgaben.forEach(a  => { aus += betragImMonat(a, monatIdx, jahr); });
+  const moStr = `${jahr}-${String(monatIdx+1).padStart(2,'0')}`;
+  const buchM = S.buchungen.filter(b => b.datum.startsWith(moStr));
+  let ein = buchM.filter(b => b.typ === 'einnahme').reduce((s,b) => s + b.betrag, 0);
+  let aus = buchM.filter(b => b.typ === 'ausgabe').reduce((s,b) => s + b.betrag, 0);
+  // Plan-Einträge nur zählen, wenn nicht bereits durch Buchung mit planRef ersetzt
+  const bookedRefs = new Set(buchM.filter(b => b.planRef).map(b => b.planRef));
+  S.einnahmen.forEach(e => { if (!bookedRefs.has(e.id)) ein += betragImMonat(e, monatIdx, jahr); });
+  S.ausgaben.forEach(a  => { if (!bookedRefs.has(a.id)) aus += betragImMonat(a, monatIdx, jahr); });
   return { ein, aus, saldo: ein - aus };
 }
 
@@ -1078,15 +1083,42 @@ function fillSelect(id, opts) {
 // ─── DASHBOARD HELPERS ───────────────────────────────────────────────
 function calcKontostand() {
   if (!S.kontostandDatum) return S.kontostand;
-  const [ky, km] = S.kontostandDatum.split('-').map(Number);
+  const [ky, km, kd] = S.kontostandDatum.split('-').map(Number);
   const baseMonth = ky * 12 + (km - 1);
   const curMonth  = S.currentYear * 12 + S.currentMonthIdx;
+  // Snapshot liegt nach dem betrachteten Monat → kein Vergangenheits-Backtracking
+  if (curMonth < baseMonth) return S.kontostand;
   let total = S.kontostand;
   for (let m = baseMonth; m <= curMonth; m++) {
     const mi = m % 12, yi = Math.floor(m / 12);
-    total += calcMonth(mi, yi).saldo;
+    if (m === baseMonth) {
+      total += saldoNachTag(mi, yi, kd);
+    } else {
+      total += calcMonth(mi, yi).saldo;
+    }
   }
   return total;
+}
+
+// Saldo des Monats, aber nur Posten mit Datum/Fälligkeit STRIKT nach `tag`
+function saldoNachTag(monatIdx, jahr, tag) {
+  const moStr  = `${jahr}-${String(monatIdx+1).padStart(2,'0')}`;
+  const cutoff = `${moStr}-${String(tag).padStart(2,'0')}`;
+  const buchM  = S.buchungen.filter(b => b.datum.startsWith(moStr) && b.datum > cutoff);
+  let ein = buchM.filter(b => b.typ === 'einnahme').reduce((s,b) => s + b.betrag, 0);
+  let aus = buchM.filter(b => b.typ === 'ausgabe').reduce((s,b) => s + b.betrag, 0);
+  const bookedRefs = new Set(
+    S.buchungen.filter(b => b.datum.startsWith(moStr) && b.planRef).map(b => b.planRef)
+  );
+  S.einnahmen.forEach(e => {
+    if (bookedRefs.has(e.id) || !e.faelligTag || e.faelligTag <= tag) return;
+    ein += betragImMonat(e, monatIdx, jahr);
+  });
+  S.ausgaben.forEach(a => {
+    if (bookedRefs.has(a.id) || !a.faelligTag || a.faelligTag <= tag) return;
+    aus += betragImMonat(a, monatIdx, jahr);
+  });
+  return ein - aus;
 }
 
 function calcBudgetIst(katId, monat, jahr) {
@@ -1745,7 +1777,7 @@ function saveKontostand() {
 function renderSichern() {
   const inp = document.getElementById('kontostandInput');
   const dat = document.getElementById('kontostandDatum');
-  if (inp) inp.value = S.kontostand || '';
+  if (inp) inp.value = S.kontostand ?? '';
   if (dat) dat.value = S.kontostandDatum || new Date().toISOString().slice(0,10);
 }
 
