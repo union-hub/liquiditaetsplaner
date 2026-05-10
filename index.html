@@ -417,6 +417,82 @@
   </div>
 </div>
 
+<!-- MODAL: Eintrag bearbeiten -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeEditModal()">×</button>
+    <div class="modal-title" id="editModalTitle">✏️ Bearbeiten</div>
+
+    <div class="form-full">
+      <label>Bezeichnung</label>
+      <input type="text" id="editName">
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Betrag (€)</label>
+        <input type="number" id="editBetrag" min="0" step="0.01">
+      </div>
+      <div>
+        <label>Kategorie</label>
+        <select id="editKat"></select>
+      </div>
+    </div>
+
+    <!-- Nur für Ausgaben -->
+    <div class="form-row edit-only-ausgabe" id="editAusTypRow">
+      <div>
+        <label>Typ</label>
+        <select id="editAusTyp">
+          <option value="fix">Fix (immer gleich)</option>
+          <option value="variabel">Variabel</option>
+          <option value="sparen">Sparbetrag</option>
+        </select>
+      </div>
+      <div></div>
+    </div>
+
+    <!-- Nur für Plan-Einträge (Einnahme/Ausgabe) -->
+    <div class="edit-only-plan">
+      <div class="form-row">
+        <div>
+          <label>Wiederholung</label>
+          <select id="editWdh">
+            <option value="monatlich">Monatlich</option>
+            <option value="einmalig">Einmalig</option>
+            <option value="jaehrlich">Jährlich</option>
+            <option value="quartalsweise">Quartalsweise</option>
+          </select>
+        </div>
+        <div>
+          <label>Ab Monat</label>
+          <select id="editAbMonat"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Bis Monat <span style="font-weight:400;color:var(--muted)">(opt.)</span></label>
+          <select id="editBisMonat"><option value="">Kein Ende</option></select>
+        </div>
+        <div>
+          <label>Fällig am Tag <span style="font-weight:400;color:var(--muted)">(1–31)</span></label>
+          <input type="number" id="editFaelligTag" min="1" max="31">
+        </div>
+      </div>
+    </div>
+
+    <!-- Nur für Buchungen -->
+    <div class="form-row edit-only-buchung">
+      <div>
+        <label>Datum</label>
+        <input type="date" id="editDatum">
+      </div>
+      <div></div>
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="saveEdit()">💾 Speichern</button>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════════ PAGES ══════════════════════════════════════════════ -->
 
 <!-- PAGE: DASHBOARD -->
@@ -1336,6 +1412,145 @@ function chartOpts({ yPrefix = '', stacked = false } = {}) {
   };
 }
 
+// ─── EDIT-MODAL (universal: einnahme | ausgabe | buchung) ─────────────
+let editCtx = null;
+
+function openEditModal(kind, id) {
+  const arr = kind === 'einnahme' ? S.einnahmen
+            : kind === 'ausgabe'  ? S.ausgaben
+            : S.buchungen;
+  const item = arr.find(x => x.id === id);
+  if (!item) return;
+  editCtx = { kind, id };
+
+  document.getElementById('editModalTitle').textContent =
+    kind === 'einnahme' ? '✏️ Einnahme bearbeiten'
+    : kind === 'ausgabe' ? '✏️ Ausgabe bearbeiten'
+    : '✏️ Buchung bearbeiten';
+
+  // Sichtbarkeit der Feldgruppen
+  const isPlan    = kind === 'einnahme' || kind === 'ausgabe';
+  const isAusgabe = kind === 'ausgabe';
+  const isBuchung = kind === 'buchung';
+  document.querySelectorAll('.edit-only-plan').forEach(el =>
+    el.style.display = isPlan ? '' : 'none');
+  document.querySelectorAll('.edit-only-ausgabe').forEach(el =>
+    el.style.display = isAusgabe ? '' : 'none');
+  document.querySelectorAll('.edit-only-buchung').forEach(el =>
+    el.style.display = isBuchung ? '' : 'none');
+
+  // Felder befüllen
+  document.getElementById('editName').value   = item.name || '';
+  document.getElementById('editBetrag').value = item.betrag ?? '';
+
+  // Kategorie-Select je nach Typ befüllen
+  const katTyp = isBuchung ? item.typ : kind;
+  const kats = S.kategorien.filter(k => k.typ === katTyp);
+  fillSelect('editKat', kats.map(k => ({ v:k.id, l:(k.emoji?k.emoji+' ':'')+k.name })));
+  document.getElementById('editKat').value = item.kat || '';
+
+  if (isAusgabe) {
+    document.getElementById('editAusTyp').value = item.typ || 'fix';
+  }
+
+  if (isPlan) {
+    document.getElementById('editWdh').value = item.wdh || 'monatlich';
+    document.getElementById('editFaelligTag').value = item.faelligTag ?? '';
+
+    // Ab-Monat: 36 Monate ab jetzt + saved value, falls außerhalb
+    const abOpts = [];
+    for (let i = 0; i < 36; i++) {
+      let m = S.currentMonthIdx + i, y = S.currentYear + Math.floor(m/12);
+      m = m % 12;
+      abOpts.push({ v: m + '_' + y, l: MONTHS_FULL[m] + ' ' + y });
+    }
+    const abVal = item.abMonat + '_' + item.abJahr;
+    if (!abOpts.find(o => o.v === abVal)) {
+      abOpts.unshift({ v: abVal, l: MONTHS_FULL[item.abMonat] + ' ' + item.abJahr });
+    }
+    fillSelect('editAbMonat', abOpts);
+    document.getElementById('editAbMonat').value = abVal;
+
+    // Bis-Monat: 24 Monate ab jetzt + saved value
+    const bisOpts = [];
+    for (let i = 0; i < 24; i++) {
+      let m = S.currentMonthIdx + i, y = S.currentYear + Math.floor(m/12);
+      m = m % 12;
+      bisOpts.push({ v: m + '_' + y, l: MONTHS_FULL[m] + ' ' + y });
+    }
+    const bisSel = document.getElementById('editBisMonat');
+    let bisHtml = '<option value="">Kein Ende</option>';
+    if (item.bisJahr != null) {
+      const bisVal = item.bisMonat + '_' + item.bisJahr;
+      if (!bisOpts.find(o => o.v === bisVal)) {
+        bisHtml += `<option value="${bisVal}">${MONTHS_FULL[item.bisMonat]} ${item.bisJahr}</option>`;
+      }
+    }
+    bisHtml += bisOpts.map(o => `<option value="${o.v}">${o.l}</option>`).join('');
+    bisSel.innerHTML = bisHtml;
+    bisSel.value = item.bisJahr != null ? (item.bisMonat + '_' + item.bisJahr) : '';
+  }
+
+  if (isBuchung) {
+    document.getElementById('editDatum').value = item.datum || '';
+  }
+
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+  editCtx = null;
+}
+
+function saveEdit() {
+  if (!editCtx) return;
+  const { kind, id } = editCtx;
+  const arr = kind === 'einnahme' ? S.einnahmen
+            : kind === 'ausgabe'  ? S.ausgaben
+            : S.buchungen;
+  const item = arr.find(x => x.id === id);
+  if (!item) { closeEditModal(); return; }
+
+  const name   = document.getElementById('editName').value.trim();
+  const betrag = parseFloat(document.getElementById('editBetrag').value);
+  const kat    = document.getElementById('editKat').value;
+  if (!name || isNaN(betrag) || betrag < 0) {
+    showToast('❌ Bitte Name und gültigen Betrag eingeben'); return;
+  }
+
+  item.name   = name;
+  item.betrag = betrag;
+  item.kat    = kat;
+
+  if (kind === 'ausgabe') {
+    item.typ = document.getElementById('editAusTyp').value;
+  }
+
+  if (kind === 'einnahme' || kind === 'ausgabe') {
+    item.wdh = document.getElementById('editWdh').value;
+    const ab = document.getElementById('editAbMonat').value.split('_');
+    item.abMonat = +ab[0]; item.abJahr = +ab[1];
+    const bis = document.getElementById('editBisMonat').value;
+    if (bis) {
+      const bisP = bis.split('_');
+      item.bisMonat = +bisP[0]; item.bisJahr = +bisP[1];
+    } else {
+      item.bisMonat = null; item.bisJahr = null;
+    }
+    const ft = parseInt(document.getElementById('editFaelligTag').value);
+    item.faelligTag = ft >= 1 && ft <= 31 ? ft : null;
+  }
+
+  if (kind === 'buchung') {
+    const datum = document.getElementById('editDatum').value;
+    if (!datum) { showToast('❌ Datum erforderlich'); return; }
+    item.datum = datum;
+  }
+
+  save(); closeEditModal(); renderAll(); showToast('✅ Aktualisiert');
+}
+
 // ─── EINNAHMEN ───────────────────────────────────────────────────────
 function addEinnahme() {
   const name   = document.getElementById('einName').value.trim();
@@ -1376,6 +1591,7 @@ function renderEinnahmen() {
       </div>
       <div class="item-right">
         <div class="item-amount pos">${b>0?fmt(b):'–'}</div>
+        <button class="btn btn-sm" style="background:var(--cream);color:var(--primary);border:1px solid var(--border)" onclick="openEditModal('einnahme','${e.id}')">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="delEinnahme('${e.id}')">🗑️</button>
       </div>
     </div>`;
@@ -1426,6 +1642,7 @@ function renderAusgaben() {
       </div>
       <div class="item-right">
         <div class="item-amount neg">${b>0?fmt(b):'–'}</div>
+        <button class="btn btn-sm" style="background:var(--cream);color:var(--primary);border:1px solid var(--border)" onclick="openEditModal('ausgabe','${a.id}')">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="delAusgabe('${a.id}')">🗑️</button>
       </div>
     </div>`;
@@ -1540,7 +1757,7 @@ function renderBuchungen() {
           const amtColor = e.typ==='einnahme' ? 'var(--teal)' : 'var(--red)';
           const amtSign  = e.typ==='einnahme' ? '+' : '−';
           let badge = '';
-          let actions = `<button class="btn btn-danger btn-sm" onclick="delBuchung('${e.id}')">🗑️</button>`;
+          let actions = `<button class="btn btn-sm" style="background:var(--cream);color:var(--primary);border:1px solid var(--border)" onclick="openEditModal('buchung','${e.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="delBuchung('${e.id}')">🗑️</button>`;
           if (e._kind === 'plan') {
             badge = `<span style="background:var(--cream-dark);color:#5a5e10;border-radius:4px;padding:1px 6px;font-size:0.62rem;font-weight:600;margin-left:4px">GEPLANT</span>`;
             actions = `<button class="btn btn-sm" style="background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-light)" onclick="markGebucht('${e.id}','${e._planTyp}')">✓ Buchen</button>`;
@@ -1758,6 +1975,9 @@ function saveCategory() {
 }
 
 // Tap outside modal to close
+document.getElementById('editModal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
 document.getElementById('catModal').addEventListener('click', function(e) {
   if (e.target === this) closeCatModal();
 });

@@ -1,5 +1,5 @@
 // Service Worker – Liquiditätsplaner PWA
-const CACHE = 'liqplaner-v4';
+const CACHE = 'liqplaner-v5';
 const ASSETS = [
   './',
   './index.html',
